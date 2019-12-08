@@ -5,10 +5,53 @@ use std::cmp::{ PartialEq, Eq };
 use std::convert::From;
 use std::fmt::{ Formatter, Debug };
 
+// Type of elements in the ring R := Zq[X] / (X^256 + 1)
 #[derive(Clone)]
 pub struct R
 {
     data: [Zq; 256]
+}
+
+impl R
+{
+    // Returns the i-th coefficient of this polynomial
+    pub fn get_coefficient(&self, i: usize) -> Zq
+    {
+        self.data[i]
+    }
+
+    pub fn zero() -> FourierReprR
+    {
+        return FourierReprR {
+            values: [ZERO; 256]
+        }
+    }
+
+    // Calculates the values which are obtained
+    // by applying compress_zq to each coefficient
+    // of the given polynomial
+    pub fn compress(&self, d: u16) -> [u16; 256]
+    {
+        let mut result: [u16; 256] = [0; 256];
+        for i in 0..256 {
+            result[i] = self.data[i].compress(d);
+        }
+        return result;
+    }
+
+    // Calculates the polynomial which coefficients
+    // are obtained by applying decompress_zq to the
+    // given values
+    pub fn decompress(x: &[u16; 256], d: u16) -> Self
+    {
+        let mut result: [Zq; 256] = [ZERO; 256];
+        for i in 0..256 {
+            result[i] = Zq::decompress(x[i], d);
+        }
+        return R {
+            data: result
+        };
+    }
 }
 
 impl PartialEq for R
@@ -152,6 +195,17 @@ impl<'a, T> From<&'a [T; 256]> for R
     }
 }
 
+impl From<[Zq; 256]> for R
+{
+    #[inline(always)]
+    fn from(data: [Zq; 256]) -> R
+    {
+        R {
+            data: data
+        }
+    }
+}
+
 impl Debug for R
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
@@ -163,6 +217,9 @@ impl Debug for R
     }
 }
 
+// Fourier representation of an element of R, i.e.
+// the values of the polynomial at each root of unity
+// in Zq
 #[derive(Clone)]
 pub struct FourierReprR
 {
@@ -237,6 +294,7 @@ impl FourierReprR
         return values;
     }
 
+    // Calculates the fourier representation of an element in R
     pub fn dft(r: &R) -> FourierReprR
     {
         FourierReprR {
@@ -244,6 +302,7 @@ impl FourierReprR
         }
     }
 
+    // Calculates the element in R with the given fourier representation
     pub fn inv_dft(fourier_repr: &FourierReprR) -> R
     {
         let inv_256: Zq = ONE / Zq::from(256 as u16);
@@ -254,6 +313,20 @@ impl FourierReprR
         return R {
             data: result
         };
+    }
+
+    pub fn zero() -> FourierReprR
+    {
+        return FourierReprR {
+            values: [ZERO; 256]
+        }
+    }
+
+    pub fn add_product(&mut self, fst: &FourierReprR, snd: &FourierReprR) 
+    {
+        for i in 0..256 {
+            self.values[i] += fst.values[i] * snd.values[i];
+        }
     }
 }
 

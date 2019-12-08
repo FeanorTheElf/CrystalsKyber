@@ -46,7 +46,7 @@ pub const INV_UNITY_ROOTS: [Zq; 256] = zq_arr![1, 1125, 5941, 1155, 1286, 2722, 
     202, 4501, 1846, 2880, 6299, 4493, 527, 1438, 4740, 1886, 1794, 5828, 4607, 5881, 2784, 5833, 2551, 
     4862, 878, 4582, 799, 198];
 
-const Q: u32 = 7681;
+pub const Q: u32 = 7681;
 
 pub const ZERO: Zq = Zq { value: 0 };
 pub const ONE: Zq = Zq { value: 1 };
@@ -79,6 +79,7 @@ fn extended_euclidean_algorithm_mod_q(fst: u32, snd: u32) -> (u32, u32)
     return (sa, ta);
 }
 
+// The type of elements of the ring Zq := Z / q*Z
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Zq 
 {
@@ -87,6 +88,7 @@ pub struct Zq
 
 impl Zq 
 {
+    // Raises this element to the power of a natural number
     pub fn pow(self, mut rhs: usize) -> Zq
     {
         let mut power: Zq = self;
@@ -99,6 +101,41 @@ impl Zq
             rhs = rhs >> 1;
         }
         return result;
+    }
+
+    // contract: Zq::From(x.representative_pos()) == x
+    pub fn representative_pos(self) -> u16
+    {
+        self.value as u16
+    }
+
+    // contract: Zq::From(x.representative_posneg()) == x
+    pub fn representative_posneg(self) -> i16
+    {
+        if self.value > 3840 {
+            -(self.value as i16)
+        } else {
+            self.value as i16
+        }
+    }
+
+    // Returns the element y in 0, ..., 2^d - 1 such
+    // that q/2^n * y is nearest to x.representative_pos()
+    pub fn compress(self, d: u16) -> u16
+    {
+        // this floating point approach always leads to the right result:
+        // for each x, n, |0.5 - (x * n / 7681) mod 1| >= |0.5 - (x * 1 / 7681) mod 1|
+        // >= |0.5 - (3840 / 7681) mod 1| >= 6.509569066531773E-5 > error in float * 7681
+        let n = (1 << d) as f32;
+        (self.representative_pos() as f32 * n / Q as f32).round() as u16 % (1 << d)
+    }
+
+    // Returns the element y of Zq for which
+    // y.representative_pos() is nearest to 2^d/q * x 
+    pub fn decompress(x: u16, d: u16) -> Self
+    {
+        let n = (1 << d) as f32;
+        Zq::from((x as f32 * Q as f32 / n).round() as u16)
     }
 }
 
@@ -208,24 +245,28 @@ impl DivAssign<Zq> for Zq
     }
 }
 
-impl From<u32> for Zq
-{
-    #[inline(always)]
-    fn from(value: u32) -> Zq
-    {
-        Zq {
-            value: value % Q
-        }
-    }
-}
-
 impl From<u16> for Zq
 {
+    // Returns the equivalence class of the argument in Zq
     #[inline(always)]
     fn from(value: u16) -> Zq
     {
         Zq {
             value: value as u32 % Q
+        }
+    }
+}
+
+impl From<i16> for Zq
+{
+    // Returns the equivalence class of the argument in Zq
+    #[inline(always)]
+    fn from(value: i16) -> Zq
+    {
+        // A i16 is positive for sure after adding 5 * Q > 32768
+        // and this addition will not overflow as i32
+        Zq {
+            value: ((value as i32 + 9 * Q as i32) % Q as i32) as u32 
         }
     }
 }
