@@ -1,5 +1,6 @@
 #![allow(dead_code, non_snake_case)]
 #![feature(test)]
+#![feature(const_generics)]
 
 extern crate test;
 extern crate rand;
@@ -12,53 +13,6 @@ use zq::*;
 use r::*;
 use m::*;
 use rand::prelude::*;
-
-// Returns the element y in 0, ..., 2^d - 1 such
-// that q/2^n * y is nearest to x.representative_pos()
-fn compress_zq(x: Zq, d: u16) -> u16
-{
-    // this floating point approach always leads to the right result:
-    // for each x, n, |0.5 - (x * n / 7681) mod 1| >= |0.5 - (x * 1 / 7681) mod 1|
-    // >= |0.5 - (3840 / 7681) mod 1| >= 6.509569066531773E-5 
-    // > (error in floating point representation of 1/7681) * 7681
-    let n = (1 << d) as f32;
-    (x.representative_pos() as f32 * n / Q as f32).round() as u16 % (1 << d)
-}
-
-// Returns the element y of Zq for which
-// y.representative_pos() is nearest to 2^d/q * x 
-fn decompress_zq(x: u16, d: u16) -> Zq
-{
-    let n = (1 << d) as f32;
-    Zq::from((x as f32 * Q as f32 / n).round() as u16)
-}
-
-// Calculates the values which are obtained
-// by applying compress_zq to each coefficient
-// of the given polynomial
-fn compress(r: &R, d: u16) -> [u16; 256]
-{
-    let mut result: [u16; 256] = [0; 256];
-    for i in 0..256 {
-        result[i] = compress_zq(r.get_coefficient(i), d);
-    }
-    return result;
-}
-
-// Calculates the polynomial which coefficients
-// are obtained by applying decompress_zq to the
-// given values
-fn decompress(x: &[u16; 256], d: u16) -> R
-{
-    let mut result: [Zq; 256] = [ZERO; 256];
-    for i in 0..256 {
-        result[i] = Zq::from(decompress_zq(x[i], d));
-    }
-    return R::from(result);
-}
-
-type PK = (M, Mat);
-type SK = M;
 
 fn sample_centered_binomial_distribution(random: u8) -> i8
 {
@@ -89,22 +43,6 @@ fn sample_m_centered_binomial_distribution<RNG>(rng: &mut RNG) -> M
     ]);
 }
 
-fn enc<RNG>(pk: &PK, m: &[u16; 256], mut rng: RNG) -> (M, FourierReprR)
-    where RNG: FnMut() -> u32
-{
-    let r = sample_m_centered_binomial_distribution(&mut rng);
-    let e1 = sample_m_centered_binomial_distribution(&mut rng);
-    let e2 = FourierReprR::dft(sample_r_centered_binomial_distribution(&mut rng));
-    let u = pk.1.transpose() * &r + &e1;
-    let v = (&pk.0 * &r) + &e2 + &(FourierReprR::dft(R::from(m)) * Zq::from(3840 as u16)); 
-    return (u, v);
-}
-
-fn dec(sk: &SK, c: (M, FourierReprR)) -> [u16; 256]
-{
-    return compress(&FourierReprR::inv_dft(c.1 - &(sk * &c.0)), 1);
-}
-
 fn uniform_r(rng: &mut ThreadRng) -> FourierReprR
 {
     let mut result: [Zq; 256] = [ZERO; 256];
@@ -112,6 +50,33 @@ fn uniform_r(rng: &mut ThreadRng) -> FourierReprR
         result[i] = Zq::from(rng.gen_range(0, 7681) as u16);
     }
     return FourierReprR::dft(R::from(result));
+}
+
+const COMPRESSION_VECTOR: u16 = 11;
+const COMPRESSION_ELEMENT: u16 = 3;
+
+type PK = (CompressedM<COMPRESSION_VECTOR>, Mat);
+type SK = M;
+type Ciphertext = (CompressedM<COMPRESSION_VECTOR>, CompressedR<COMPRESSION_ELEMENT>);
+type Message = [u8; 32];
+
+fn enc<RNG>(pk: &PK, plaintext: Message, mut rng: RNG) -> Ciphertext
+    where RNG: FnMut() -> u32
+{
+    let r = sample_m_centered_binomial_distribution(&mut rng);
+    let e1 = sample_m_centered_binomial_distribution(&mut rng);
+    let e2 = FourierReprR::dft(sample_r_centered_binomial_distribution(&mut rng));
+    let u = pk.1.transpose() * &r + &e1;
+    let t = pk.0.decompress();
+    let message = CompressedR::from_data(plaintext).decompress();
+    let v = (&t * &r) + &e2 + &FourierReprR::dft(message); 
+    return (u.compress(), FourierReprR::inv_dft(v).compress());
+}
+
+fn dec(sk: &SK, c: Ciphertext) -> Message
+{
+    let m = c.1.decompress() - &FourierReprR::inv_dft(sk * &c.0.decompress());
+    return m.compress().get_data();
 }
 
 fn key_gen(rng: &mut ThreadRng) -> (SK, PK)
@@ -128,21 +93,12 @@ fn key_gen(rng: &mut ThreadRng) -> (SK, PK)
     let s: M = sample_m_centered_binomial_distribution(&mut || rng.next_u32());
     let e: M = sample_m_centered_binomial_distribution(&mut || rng.next_u32());
     let b: M = &A * &s + &e;
-    return (s, (b, A));
+    return (s, (b.compress(), A));
 }
 
 fn main() 
 {
-    let mut thread_rng = rand::thread_rng();
-    let (sk, pk) = key_gen(&mut thread_rng);
-    let mut expected_message = [0; 256];
-    expected_message[0] = 1;
-    expected_message[10] = 1;
-    let ciphertext = enc(&pk, &expected_message, || thread_rng.next_u32());
-    let message = dec(&sk, ciphertext);
-    for i in 0..256 {
-        print!("{}, ", message[i]);
-    }
+    println!("{}", std::mem::size_of::<PK>());
 }
 
 #[bench]
@@ -150,12 +106,12 @@ fn bench_all(bencher: &mut test::Bencher) {
     let mut thread_rng = rand::thread_rng();
     bencher.iter(|| {
         let (sk, pk) = key_gen(&mut thread_rng);
-        let mut expected_message = [0; 256];
+        let mut expected_message: Message = [0; 32];
         expected_message[0] = 1;
         expected_message[10] = 1;
-        let ciphertext = enc(&pk, &expected_message, || thread_rng.next_u32());
+        let ciphertext = enc(&pk, expected_message.clone(), || thread_rng.next_u32());
         let message = dec(&sk, ciphertext);
-        for i in 0..256 {
+        for i in 0..32 {
             assert!(expected_message[i] == message[i], "Expected messages to be the same, differ at index {}: {} != {}", i, expected_message[i], message[i]);
         }
     });

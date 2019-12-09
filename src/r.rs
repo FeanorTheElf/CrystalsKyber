@@ -14,43 +14,11 @@ pub struct R
 
 impl R
 {
-    // Returns the i-th coefficient of this polynomial
-    pub fn get_coefficient(&self, i: usize) -> Zq
-    {
-        self.data[i]
-    }
-
     pub fn zero() -> FourierReprR
     {
         return FourierReprR {
             values: [ZERO; 256]
         }
-    }
-
-    // Calculates the values which are obtained
-    // by applying compress_zq to each coefficient
-    // of the given polynomial
-    pub fn compress(&self, d: u16) -> [u16; 256]
-    {
-        let mut result: [u16; 256] = [0; 256];
-        for i in 0..256 {
-            result[i] = self.data[i].compress(d);
-        }
-        return result;
-    }
-
-    // Calculates the polynomial which coefficients
-    // are obtained by applying decompress_zq to the
-    // given values
-    pub fn decompress(x: &[u16; 256], d: u16) -> Self
-    {
-        let mut result: [Zq; 256] = [ZERO; 256];
-        for i in 0..256 {
-            result[i] = Zq::decompress(x[i], d);
-        }
-        return R {
-            data: result
-        };
     }
 }
 
@@ -534,6 +502,62 @@ impl Debug for FourierReprR
         (0..255).try_for_each(|i| write!(f, "{}, ", self.values[i]))?;
         write!(f, "{}]", self.values[255])?;
         return Ok(());
+    }
+}
+
+pub struct CompressedR<const D : u16>
+{
+    data: [CompressedZq<D>; 256]
+}
+
+impl R
+{
+    pub fn compress<const D : u16>(&self) -> CompressedR<D>
+    {
+        let mut data = [CompressedZq::zero(); 256];
+        for i in 0..256 {
+            data[i] = self.data[i].compress();
+        }
+        return CompressedR {
+            data: data
+        };
+    }
+}
+
+impl<const D : u16> CompressedR<D>
+{
+    pub fn decompress(&self) -> R
+    {
+        let mut data = [ZERO; 256];
+        for i in 0..256 {
+            data[i] = self.data[i].decompress();
+        }
+        return R {
+            data: data
+        };
+    }
+}
+
+impl CompressedR<1>
+{
+    pub fn get_data(&self) -> [u8; 32]
+    {
+        let mut result: [u8; 32] = [0; 32];
+        for i in 0..256 {
+            result[i/8] |= self.data[i].get_data() << (i % 8);
+        }
+        return result;
+    }
+
+    pub fn from_data(m: [u8; 32]) -> CompressedR<1>
+    {
+        let mut result: [CompressedZq<1>; 256] = [CompressedZq::zero(); 256];
+        for i in 0..256 {
+            result[i] = CompressedZq::from_data(m[i/8] >> (i % 8));
+        }
+        return CompressedR {
+            data: result
+        };
     }
 }
 

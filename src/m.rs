@@ -246,3 +246,33 @@ impl<'a> Mul<&'a M> for TransposedMat<'a>
         };
     }
 }
+
+pub struct CompressedM<const D : u16>
+{
+    data: [CompressedR<D>; 3]
+}
+
+impl M
+{
+    pub fn compress<const D : u16>(self) -> CompressedM<D>
+    {
+        let [fst, snd, trd] = self.data;
+        CompressedM {
+            data: [FourierReprR::inv_dft(fst).compress(), 
+                FourierReprR::inv_dft(snd).compress(), 
+                FourierReprR::inv_dft(trd).compress()]
+        }
+    }
+}
+
+impl<const D : u16> CompressedM<D>
+{
+    pub fn decompress(&self) -> M
+    {
+        M {
+            data: [FourierReprR::dft(self.data[0].decompress()), 
+                FourierReprR::dft(self.data[1].decompress()), 
+                FourierReprR::dft(self.data[2].decompress())]
+        }
+    }
+}

@@ -118,25 +118,6 @@ impl Zq
             self.value as i16
         }
     }
-
-    // Returns the element y in 0, ..., 2^d - 1 such
-    // that q/2^n * y is nearest to x.representative_pos()
-    pub fn compress(self, d: u16) -> u16
-    {
-        // this floating point approach always leads to the right result:
-        // for each x, n, |0.5 - (x * n / 7681) mod 1| >= |0.5 - (x * 1 / 7681) mod 1|
-        // >= |0.5 - (3840 / 7681) mod 1| >= 6.509569066531773E-5 > error in float * 7681
-        let n = (1 << d) as f32;
-        (self.representative_pos() as f32 * n / Q as f32).round() as u16 % (1 << d)
-    }
-
-    // Returns the element y of Zq for which
-    // y.representative_pos() is nearest to 2^d/q * x 
-    pub fn decompress(x: u16, d: u16) -> Self
-    {
-        let n = (1 << d) as f32;
-        Zq::from((x as f32 * Q as f32 / n).round() as u16)
-    }
 }
 
 impl Debug for Zq 
@@ -267,6 +248,62 @@ impl From<i16> for Zq
         // and this addition will not overflow as i32
         Zq {
             value: ((value as i32 + 9 * Q as i32) % Q as i32) as u32 
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CompressedZq<const D : u16>
+{
+    data: u16
+}
+
+impl Zq 
+{
+    // Returns the element y in 0, ..., 2^d - 1 such
+    // that q/2^n * y is nearest to x.representative_pos()
+    pub fn compress<const D: u16>(self) -> CompressedZq<D>
+    {
+        // this floating point approach always leads to the right result:
+        // for each x, n, |0.5 - (x * n / 7681) mod 1| >= |0.5 - (x * 1 / 7681) mod 1|
+        // >= |0.5 - (3840 / 7681) mod 1| >= 6.509569066531773E-5 
+        // > (error in floating point representation of 1/7681) * 7681
+        let n = (1 << D) as f32;
+        CompressedZq {
+            data: (self.representative_pos() as f32 * n / Q as f32).round() as u16 % (1 << D)
+        }
+    }
+}
+
+impl<const D: u16> CompressedZq<D>
+{
+    // Returns the element y of Zq for which
+    // y.representative_pos() is nearest to 2^d/q * x 
+    pub fn decompress(self) -> Zq
+    {
+        let n = (1 << D) as f32;
+        Zq::from((self.data as f32 * Q as f32 / n).round() as u16)
+    }
+
+    pub fn zero() -> CompressedZq<D>
+    {
+        CompressedZq {
+            data: 0
+        }
+    }
+}
+
+impl CompressedZq<1>
+{
+    pub fn get_data(&self) -> u8
+    {
+        self.data as u8
+    }
+
+    pub fn from_data(m: u8) -> CompressedZq<1>
+    {
+        CompressedZq {
+            data: (m & 1) as u16
         }
     }
 }
