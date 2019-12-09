@@ -19,7 +19,8 @@ fn compress_zq(x: Zq, d: u16) -> u16
 {
     // this floating point approach always leads to the right result:
     // for each x, n, |0.5 - (x * n / 7681) mod 1| >= |0.5 - (x * 1 / 7681) mod 1|
-    // >= |0.5 - (3840 / 7681) mod 1| >= 6.509569066531773E-5 > error in float * 7681
+    // >= |0.5 - (3840 / 7681) mod 1| >= 6.509569066531773E-5 
+    // > (error in floating point representation of 1/7681) * 7681
     let n = (1 << d) as f32;
     (x.representative_pos() as f32 * n / Q as f32).round() as u16 % (1 << d)
 }
@@ -82,9 +83,9 @@ fn sample_m_centered_binomial_distribution<RNG>(rng: &mut RNG) -> M
     where RNG: FnMut() -> u32
 {
     return M::from([
-        FourierReprR::dft(&sample_r_centered_binomial_distribution(rng)),
-        FourierReprR::dft(&sample_r_centered_binomial_distribution(rng)),
-        FourierReprR::dft(&sample_r_centered_binomial_distribution(rng))
+        FourierReprR::dft(sample_r_centered_binomial_distribution(rng)),
+        FourierReprR::dft(sample_r_centered_binomial_distribution(rng)),
+        FourierReprR::dft(sample_r_centered_binomial_distribution(rng))
     ]);
 }
 
@@ -93,15 +94,15 @@ fn enc<RNG>(pk: &PK, m: &[u16; 256], mut rng: RNG) -> (M, FourierReprR)
 {
     let r = sample_m_centered_binomial_distribution(&mut rng);
     let e1 = sample_m_centered_binomial_distribution(&mut rng);
-    let e2 = FourierReprR::dft(&sample_r_centered_binomial_distribution(&mut rng));
+    let e2 = FourierReprR::dft(sample_r_centered_binomial_distribution(&mut rng));
     let u = pk.1.transpose() * &r + &e1;
-    let v = (&pk.0 * &r) + &e2 + &(FourierReprR::dft(&R::from(m)) * Zq::from(3840 as u16)); 
+    let v = (&pk.0 * &r) + &e2 + &(FourierReprR::dft(R::from(m)) * Zq::from(3840 as u16)); 
     return (u, v);
 }
 
 fn dec(sk: &SK, c: (M, FourierReprR)) -> [u16; 256]
 {
-    return compress(&FourierReprR::inv_dft(&(c.1 - &(sk * &c.0))), 1);
+    return compress(&FourierReprR::inv_dft(c.1 - &(sk * &c.0)), 1);
 }
 
 fn uniform_r(rng: &mut ThreadRng) -> FourierReprR
@@ -110,7 +111,7 @@ fn uniform_r(rng: &mut ThreadRng) -> FourierReprR
     for i in 0..256 {
         result[i] = Zq::from(rng.gen_range(0, 7681) as u16);
     }
-    return FourierReprR::dft(&R::from(result));
+    return FourierReprR::dft(R::from(result));
 }
 
 fn key_gen(rng: &mut ThreadRng) -> (SK, PK)
