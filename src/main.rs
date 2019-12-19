@@ -1,6 +1,7 @@
 #![allow(dead_code, non_snake_case)]
+#![allow(non_upper_case_globals)]
 #![feature(test)]
-#![feature(const_generics)]
+#![feature(rustc_attrs)]
 
 extern crate test;
 extern crate rand;
@@ -8,6 +9,8 @@ extern crate rand;
 mod zq;
 mod r;
 mod m;
+
+mod avx_zq;
 
 use zq::*;
 use r::*;

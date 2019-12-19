@@ -196,9 +196,9 @@ pub struct FourierReprR
 
 impl FourierReprR
 {
-    #[no_mangle]
     #[inline(never)]
-    fn fft(mut values: [Zq; 256], unity_roots: [Zq; 256]) -> [Zq; 256]
+    fn fft<F>(mut values: [Zq; 256], unity_root: F) -> [Zq; 256]
+        where F: Fn(usize) -> Zq
     {
         // Use the Cooley–Tukey FFT algorithm (N = 256):
         // for i from 1 to log(N) do:
@@ -223,7 +223,7 @@ impl FourierReprR
             old_d = d << 1;
             for k in 0..n/2 {
                 // w := n-th root of unity, unity_root := w^k
-                let unity_root = unity_roots[k * d];
+                let unity_root = unity_root(k * d);
                 for j in 0..d {
                     // calculate the k-DFT of [x_j, x_j+d, x_j+2d, ..., x_j+(n-1)d],
                     // have x_j + w^k * x_j+d + w^2k * x_j+2d + ...
@@ -252,7 +252,7 @@ impl FourierReprR
             d = d >> 1;
             old_d = d << 1;
             for k in 0..n/2 {
-                let unity_root = unity_roots[k * d];
+                let unity_root = unity_root(k * d);
                 for j in 0..d {
                     values[k * d + j] = temp[k * old_d + j] + unity_root * temp[k * old_d + j + d];
                     values[(k + n/2) * d + j] = temp[k * old_d + j] - unity_root * temp[k * old_d + j + d];
@@ -267,7 +267,7 @@ impl FourierReprR
     pub fn dft(r: R) -> FourierReprR
     {
         FourierReprR {
-            values: Self::fft(r.data, UNITY_ROOTS)
+            values: Self::fft(r.data, |i| UNITY_ROOTS[i])
         }
     }
 
@@ -276,7 +276,7 @@ impl FourierReprR
     pub fn inv_dft(fourier_repr: FourierReprR) -> R
     {
         let inv_256: Zq = ONE / Zq::from(256 as u16);
-        let mut result = Self::fft(fourier_repr.values, INV_UNITY_ROOTS);
+        let mut result = Self::fft(fourier_repr.values, |i| UNITY_ROOTS[(256 - i) & 0xFF]);
         for i in 0..256 {
             result[i] *= inv_256;
         }
