@@ -1,7 +1,7 @@
 #![allow(dead_code, non_snake_case)]
 #![allow(non_upper_case_globals)]
 #![feature(test)]
-#![feature(rustc_attrs)]
+#![feature(const_generics)]
 
 extern crate test;
 extern crate rand;
@@ -50,7 +50,7 @@ fn uniform_r(rng: &mut ThreadRng) -> FourierReprR
 {
     let mut result: [Zq; 256] = [ZERO; 256];
     for i in 0..256 {
-        result[i] = Zq::from(rng.gen_range(0, 7681) as u16);
+        result[i] = Zq::from(rng.gen_range(0, 7681) as i16);
     }
     return FourierReprR::dft(R::from(result));
 }

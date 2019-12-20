@@ -208,18 +208,6 @@ impl DivAssign<Zq> for Zq
     }
 }
 
-impl From<u16> for Zq
-{
-    // Returns the equivalence class of the argument in Zq
-    #[inline(always)]
-    fn from(value: u16) -> Zq
-    {
-        Zq {
-            value: value as u32 % Q
-        }
-    }
-}
-
 impl From<i16> for Zq
 {
     // Returns the equivalence class of the argument in Zq
@@ -229,7 +217,7 @@ impl From<i16> for Zq
         // A i16 is positive for sure after adding 5 * Q > 32768
         // and this addition will not overflow as i32
         Zq {
-            value: ((value as i32 + 9 * Q as i32) % Q as i32) as u32 
+            value: ((value as i32 + 5 * Q as i32) % Q as i32) as u32 
         }
     }
 }
@@ -264,7 +252,7 @@ impl<const d: u16> CompressedZq<d>
     pub fn decompress(self) -> Zq
     {
         let n = (1 << d) as f32;
-        Zq::from((self.data as f32 * Q as f32 / n).round() as u16)
+        Zq::from((self.data as f32 * Q as f32 / n).round() as i16)
     }
 
     pub fn zero() -> CompressedZq<d>
@@ -297,7 +285,7 @@ fn bench_add_mul(bencher: &mut test::Bencher)
         2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704];
     let mut elements: [Zq; 32] = [ZERO; 32];
     for i in 0..32 {
-        elements[i] = Zq::from(data[i] as u16);
+        elements[i] = Zq::from(data[i] as i16);
     }
     bencher.iter(|| {
         for i in 0..32 {

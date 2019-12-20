@@ -131,17 +131,6 @@ impl MulAssign<Zq> for M
     }
 }
 
-impl<'a> DivAssign<&'a FourierReprR> for M
-{
-    #[inline(always)]
-    fn div_assign(&mut self, rhs: &'a FourierReprR) 
-    {
-        for i in 0..3 {
-            self.data[i] /= rhs;
-        }
-    }
-}
-
 impl DivAssign<Zq> for M
 {
     #[inline(always)]

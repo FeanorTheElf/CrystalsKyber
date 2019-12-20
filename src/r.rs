@@ -61,7 +61,7 @@ impl<'a> Sub<&'a R> for R
     type Output = R;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a R) -> R
+    fn sub(mut self, rhs: &'a R) -> Self::Output
     {
         self -= rhs;
         return self;
@@ -73,7 +73,7 @@ impl<'a> Sub<R> for &'a R
     type Output = R;
 
     #[inline(always)]
-    fn sub(self, mut rhs: R) -> R
+    fn sub(self, mut rhs: R) -> Self::Output
     {
         rhs -= self;
         rhs *= ZERO - ONE;
@@ -86,7 +86,7 @@ impl Mul<Zq> for R
     type Output = R;
 
     #[inline(always)]
-    fn mul(mut self, rhs: Zq) -> R
+    fn mul(mut self, rhs: Zq) -> Self::Output
     {
         self *= rhs;
         return self;
@@ -98,7 +98,7 @@ impl Div<Zq> for R
     type Output = R;
 
     #[inline(always)]
-    fn div(mut self, rhs: Zq) -> R
+    fn div(mut self, rhs: Zq) -> Self::Output
     {
         self *= rhs;
         return self;
@@ -275,7 +275,7 @@ impl FourierReprR
     #[inline(always)]
     pub fn inv_dft(fourier_repr: FourierReprR) -> R
     {
-        let inv_256: Zq = ONE / Zq::from(256 as u16);
+        let inv_256: Zq = ONE / Zq::from(256_i16);
         let mut result = Self::fft(fourier_repr.values, |i| UNITY_ROOTS[(256 - i) & 0xFF]);
         for i in 0..256 {
             result[i] *= inv_256;
@@ -315,7 +315,7 @@ impl<'a> Add<&'a FourierReprR> for FourierReprR
     type Output = FourierReprR;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a FourierReprR) -> FourierReprR
+    fn add(mut self, rhs: &'a FourierReprR) -> Self::Output
     {
         self += rhs;
         return self;
@@ -327,7 +327,7 @@ impl<'a> Add<FourierReprR> for &'a FourierReprR
     type Output = FourierReprR;
 
     #[inline(always)]
-    fn add(self, mut rhs: FourierReprR) -> FourierReprR
+    fn add(self, mut rhs: FourierReprR) -> Self::Output
     {
         rhs += self;
         return rhs;
@@ -339,7 +339,7 @@ impl<'a> Mul<&'a FourierReprR> for FourierReprR
     type Output = FourierReprR;
 
     #[inline(always)]
-    fn mul(mut self, rhs: &'a FourierReprR) -> FourierReprR
+    fn mul(mut self, rhs: &'a FourierReprR) -> Self::Output
     {
         self *= rhs;
         return self;
@@ -351,7 +351,7 @@ impl<'a> Mul<FourierReprR> for &'a FourierReprR
     type Output = FourierReprR;
 
     #[inline(always)]
-    fn mul(self, mut rhs: FourierReprR) -> FourierReprR
+    fn mul(self, mut rhs: FourierReprR) -> Self::Output
     {
         rhs *= self;
         return rhs;
@@ -363,7 +363,7 @@ impl Mul<Zq> for FourierReprR
     type Output = FourierReprR;
 
     #[inline(always)]
-    fn mul(mut self, rhs: Zq) -> FourierReprR
+    fn mul(mut self, rhs: Zq) -> Self::Output
     {
         self *= rhs;
         return self;
@@ -375,7 +375,7 @@ impl<'a> Sub<&'a FourierReprR> for FourierReprR
     type Output = FourierReprR;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a FourierReprR) -> FourierReprR
+    fn sub(mut self, rhs: &'a FourierReprR) -> Self::Output
     {
         self -= rhs;
         return self;
@@ -387,23 +387,11 @@ impl<'a> Sub<FourierReprR> for &'a FourierReprR
     type Output = FourierReprR;
 
     #[inline(always)]
-    fn sub(self, mut rhs: FourierReprR) -> FourierReprR
+    fn sub(self, mut rhs: FourierReprR) -> Self::Output
     {
         rhs -= self;
         rhs *= ZERO - ONE;
         return rhs;
-    }
-}
-
-impl<'a> Div<&'a FourierReprR> for FourierReprR
-{
-    type Output = FourierReprR;
-
-    #[inline(always)]
-    fn div(mut self, rhs: &'a FourierReprR) -> FourierReprR
-    {
-        self /= rhs;
-        return self;
     }
 }
 
@@ -412,7 +400,7 @@ impl Div<Zq> for FourierReprR
     type Output = FourierReprR;
 
     #[inline(always)]
-    fn div(mut self, rhs: Zq) -> FourierReprR
+    fn div(mut self, rhs: Zq) -> Self::Output
     {
         self /= rhs;
         return self;
@@ -455,16 +443,6 @@ impl MulAssign<Zq> for FourierReprR
     fn mul_assign(&mut self, rhs: Zq) {
         for i in 0..256 {
             self.values[i] *= rhs;
-        }
-    }
-}
-
-impl<'a> DivAssign<&'a FourierReprR> for FourierReprR
-{
-    #[inline(always)]
-    fn div_assign(&mut self, rhs: &'a FourierReprR) {
-        for i in 0..256 {
-            self.values[i] /= rhs.values[i];
         }
     }
 }
@@ -562,7 +540,7 @@ impl CompressedR<1>
 }
 
 #[cfg(test)]
-const ELEMENT: [u16; 256] = [1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 81, 0, 1, 0, 0, 0, 0, 0, 
+const ELEMENT: [i16; 256] = [1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 81, 0, 1, 0, 0, 0, 0, 0, 
     0, 0, 0, 0, 55, 0, 0, 0, 0, 0, 0, 0, 0, 71, 0, 0, 0, 0, 0, 0, 0, 16, 0, 76, 
     13, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 84, 0, 0, 99, 0, 60, 0, 0, 0, 7680, 
     0, 0, 0, 0, 0, 26, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 0, 0, 256, 0, 0, 0, 0, 0, 0, 
@@ -575,7 +553,7 @@ const ELEMENT: [u16; 256] = [1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 81, 0, 1, 0, 0, 0,
     0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
 
 #[cfg(test)]
-const DFT_ELEMENT: [u16; 256] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663, 
+const DFT_ELEMENT: [i16; 256] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663, 
     1301, 159, 4074, 2945, 6671, 1392, 3999, 2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 
     3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704, 2348, 6823, 6135, 854, 3320, 
     2929, 6417, 7368, 535, 1491, 7271, 7666, 1256, 6093, 4767, 3442, 6055, 2757, 3953, 7391, 
@@ -616,12 +594,12 @@ fn test_inv_fft() {
 fn test_scalar_mul_div() {
     let mut element = R::from(&ELEMENT);
     let mut fourier_repr = FourierReprR::dft(element.clone());
-    element *= Zq::from(653 as u16);
-    fourier_repr *= Zq::from(653 as u16);
+    element *= Zq::from(653_i16);
+    fourier_repr *= Zq::from(653_i16);
     assert_eq!(element, FourierReprR::inv_dft(fourier_repr.clone()));
 
-    element /= Zq::from(5321 as u16);
-    fourier_repr /= Zq::from(5321 as u16);
+    element /= Zq::from(5321_i16);
+    fourier_repr /= Zq::from(5321_i16);
     assert_eq!(element, FourierReprR::inv_dft(fourier_repr.clone()));
 }
 
