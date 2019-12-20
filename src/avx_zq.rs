@@ -27,7 +27,7 @@ unsafe fn avx_zero() -> __m256i { _mm256_setzero_si256() }
 macro_rules! impl_get {
     ($($ident:ident: $index:literal),*) => {
         $(
-            fn $ident(&self) -> Zq
+            pub fn $ident(&self) -> Zq
             {
                 Zq::from( unsafe { _mm256_extract_epi32(self.data, $index) } as i16)
             }
@@ -38,7 +38,7 @@ macro_rules! impl_get {
 macro_rules! impl_set {
     ($($ident:ident: $index:literal),*) => {
         $(
-            fn $ident(&mut self, value: Zq)
+            pub fn $ident(&mut self, value: Zq)
             {
                 unsafe {
                     self.data = _mm256_blend_epi32(self.data, _mm256_set1_epi32(value.representative_pos() as i32), 1 << $index);
@@ -72,12 +72,15 @@ impl Zq8
 
     impl_get!(get_0: 0, get_1: 1, get_2: 2, get_3: 3, get_4: 4, get_5: 5, get_6: 6, get_7: 7);
     impl_set!(set_0: 0, set_1: 1, set_2: 2, set_3: 3, set_4: 4, set_5: 5, set_6: 6, set_7: 7);
+
+    pub fn
 }
 
-impl From<[Zq; 8]> for Zq8
+impl<'a> From<&'a [Zq]> for Zq8
 {
-    fn from(value: [Zq; 8]) -> Zq8
+    fn from(value: &'a [Zq]) -> Zq8
     {
+        assert_eq!(8, value.len());
         Zq8 {
             data: unsafe { _mm256_setr_epi32(
                 value[0].representative_pos() as i32, 
@@ -93,10 +96,11 @@ impl From<[Zq; 8]> for Zq8
     }
 }
 
-impl From<[i16; 8]> for Zq8
+impl<'a> From<&'a [i16]> for Zq8
 {
-    fn from(value: [i16; 8]) -> Zq8
+    fn from(value: &'a [i16]) -> Zq8
     {
+        assert_eq!(8, value.len());
         unsafe {
             let items = _mm256_setr_epi32(value[0] as i32, 
                 value[1] as i32, 
@@ -110,6 +114,14 @@ impl From<[i16; 8]> for Zq8
                 data: mod_q(items)
             };
         }
+    }
+}
+
+impl From<[i16; 8]> for Zq8
+{
+    fn from(value: [i16; 8]) -> Zq8
+    {
+        Zq8::from(&value[..])
     }
 }
 
@@ -341,4 +353,21 @@ fn test_modulo_q() {
         }
         assert!((x as i32) % 7681 == m, "Expected {}, got {} at for {}", (x as i32) % 7681, m, x);
     }
+}
+
+#[bench]
+fn bench_add_mul(bencher: &mut test::Bencher)
+{
+    let data: [i16; 32] = [1145, 6716, 88, 5957, 3742, 3441, 2663, 1301, 159, 4074, 2945, 6671, 1392, 3999, 
+        2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704];
+    let mut elements: [Zq8; 4] = [Zq8::from(&data[0..8]), Zq8::from(&data[8..16]), Zq8::from(&data[16..24]), Zq8::from(&data[24..32])];
+    bencher.iter(|| {
+        let mut result = Zq8::zero();
+        for i in 0..4 {
+            for j in 0..4 {
+                result += &(elements[i] * &elements[j] + &elements[i] + &elements[j]);
+            }
+        }
+        assert_eq!(Zq8::zero(), result);
+    });
 }
