@@ -100,6 +100,14 @@ impl Zq
             self.value as i16
         }
     }
+
+    pub fn from_perfect(value: i32) -> Zq
+    {
+        assert!(value >= 0 && (value as u32) < Q);
+        Zq {
+            value: value as u32
+        }
+    }
 }
 
 impl Debug for Zq 
@@ -281,17 +289,19 @@ impl CompressedZq<1>
 #[bench]
 fn bench_add_mul(bencher: &mut test::Bencher)
 {
-    let data: [u32; 32] = [1145, 6716, 88, 5957, 3742, 3441, 2663, 1301, 159, 4074, 2945, 6671, 1392, 3999, 
-        2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704];
+    let data: [u32; 32] = core::hint::black_box([1145, 6716, 88, 5957, 3742, 3441, 2663, 1301, 159, 4074, 2945, 6671, 1392, 3999, 
+        2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704]);
     let mut elements: [Zq; 32] = [ZERO; 32];
     for i in 0..32 {
         elements[i] = Zq::from(data[i] as i16);
     }
     bencher.iter(|| {
+        let mut result: Zq = ZERO;
         for i in 0..32 {
             for j in 0..32 {
-                assert_eq!((data[i] * data[j] + data[i] + data[j]) % Q, (elements[i] * elements[j] + elements[i] + elements[j]).value % Q);
+                result += elements[i] * elements[j];
             }
         }
+        assert_eq!(Zq::from(4050), result);
     });
 }

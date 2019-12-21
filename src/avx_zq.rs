@@ -4,6 +4,7 @@ use std::cmp::{ PartialEq, Eq };
 use std::fmt::{ Debug };
 
 use super::zq::Zq;
+use super::const_fn;
 
 #[cfg(test)]
 use super::zq::ZERO;
@@ -73,7 +74,40 @@ impl Zq8
     impl_get!(get_0: 0, get_1: 1, get_2: 2, get_3: 3, get_4: 4, get_5: 5, get_6: 6, get_7: 7);
     impl_set!(set_0: 0, set_1: 1, set_2: 2, set_3: 3, set_4: 4, set_5: 5, set_6: 6, set_7: 7);
 
-    pub fn
+    pub fn sum_horizontal(&self) -> Zq
+    {
+        unsafe {
+            let low4: __m128i = _mm256_extractf128_si256(self.data, 0);
+            let high4: __m128i = _mm256_extractf128_si256(self.data, 1);
+            let sum4: __m128i = _mm_add_epi32(low4, high4);
+            let low2: i64 = _mm_extract_epi64(sum4, 0);
+            let high2: i64 = _mm_extract_epi64(sum4, 1);
+            let sum2: i64 = low2 + high2;
+            let mut sum: i32 = ((sum2 >> 32) + (sum2 & 0xFFFFFFFF)) as i32;
+            if sum >= 4 * Q {
+                sum -= 4 * Q;
+            }
+            if sum >= 2 * Q {
+                sum -= 2 * Q;
+            }
+            if sum >= Q {
+                sum -= Q;
+            }
+            return Zq::from_perfect(sum);
+        }
+    }
+
+    pub fn shift_left(self, amount: usize) -> Zq8
+    {
+        let i: [i32; 8] = const_fn::shift_left(amount, [0, 1, 2, 3, 4, 5, 6, 7]);
+        unsafe {
+            let index: __m256i = _mm256_setr_epi32(i[0], i[1], i[2], i[3], i[4], i[5], i[6], i[7]);
+            let result = _mm256_permutevar8x32_epi32(self.data, index);
+            return Zq8 {
+                data: result
+            };
+        }
+    }
 }
 
 impl<'a> From<&'a [Zq]> for Zq8
@@ -339,6 +373,12 @@ fn test_mul() {
 }
 
 #[test]
+fn test_shift_left() {
+    let v: Zq8 = Zq8::from([0, 1, 2, 3, 4, 5, 6, 7]);
+    assert_eq!(Zq8::from([1, 2, 3, 4, 5, 6, 7, 0]), v.shift_left(1));
+}
+
+#[test]
 fn test_modulo_q() {
     for x in 0..7680*7680 {
         let p: i32 = x as i32;
@@ -358,16 +398,23 @@ fn test_modulo_q() {
 #[bench]
 fn bench_add_mul(bencher: &mut test::Bencher)
 {
-    let data: [i16; 32] = [1145, 6716, 88, 5957, 3742, 3441, 2663, 1301, 159, 4074, 2945, 6671, 1392, 3999, 
-        2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704];
-    let mut elements: [Zq8; 4] = [Zq8::from(&data[0..8]), Zq8::from(&data[8..16]), Zq8::from(&data[16..24]), Zq8::from(&data[24..32])];
+    let data: [i16; 32] = core::hint::black_box([1145, 6716, 88, 5957, 3742, 3441, 2663, 1301, 159, 4074, 2945, 6671, 1392, 3999, 
+        2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704]);
+    let elements: [Zq8; 4] = [Zq8::from(&data[0..8]), Zq8::from(&data[8..16]), Zq8::from(&data[16..24]), Zq8::from(&data[24..32])];
     bencher.iter(|| {
         let mut result = Zq8::zero();
         for i in 0..4 {
             for j in 0..4 {
-                result += &(elements[i] * &elements[j] + &elements[i] + &elements[j]);
+                result += &(elements[i] * &elements[j]);
+                result += &(elements[i] * &elements[j].shift_left(1));
+                result += &(elements[i] * &elements[j].shift_left(2));
+                result += &(elements[i] * &elements[j].shift_left(3));
+                result += &(elements[i] * &elements[j].shift_left(4));
+                result += &(elements[i] * &elements[j].shift_left(5));
+                result += &(elements[i] * &elements[j].shift_left(6));
+                result += &(elements[i] * &elements[j].shift_left(7));
             }
         }
-        assert_eq!(Zq8::zero(), result);
+        assert_eq!(Zq::from(4050), result.sum_horizontal());
     });
 }

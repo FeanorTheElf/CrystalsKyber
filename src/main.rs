@@ -1,10 +1,11 @@
-#![allow(dead_code, non_snake_case)]
-#![allow(non_upper_case_globals)]
+#![allow(dead_code, non_snake_case, non_upper_case_globals)]
 #![feature(test)]
 #![feature(const_generics)]
 
 extern crate test;
 extern crate rand;
+
+mod const_fn;
 
 mod zq;
 mod r;
