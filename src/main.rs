@@ -5,13 +5,16 @@
 extern crate test;
 extern crate rand;
 
-mod const_fn;
+#[macro_use]
+mod util;
+mod avx_util;
 
 mod zq;
 mod r;
 mod m;
 
 mod avx_zq;
+// mod avx_r;
 
 use zq::*;
 use r::*;

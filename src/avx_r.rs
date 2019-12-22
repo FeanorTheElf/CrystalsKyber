@@ -1,17 +1,18 @@
 use super::zq::*;
+use super::avx_zq::*;
 
-use std::ops::{ Add, Mul, Div, Sub, AddAssign, MulAssign, DivAssign, SubAssign };
+use std::ops::{ Add, Mul, Div, Sub, Neg, AddAssign, MulAssign, DivAssign, SubAssign };
 use std::cmp::{ PartialEq, Eq };
 use std::convert::From;
 use std::fmt::{ Formatter, Debug };
 
 pub const N: usize = 256;
 
-// Type of elements in the ring R := Zq[X] / (X^N + 1)
+// Type of elements in the ring R := Zq[X] / (X^256 + 1)
 #[derive(Clone)]
 pub struct R
 {
-    data: [Zq; N]
+    data: [Zq8; 32]
 }
 
 impl R
@@ -19,7 +20,7 @@ impl R
     pub fn zero() -> FourierReprR
     {
         return FourierReprR {
-            values: [ZERO; N]
+            values: [Zq8::zero(); 32]
         }
     }
 }
@@ -28,7 +29,7 @@ impl PartialEq for R
 {
     fn eq(&self, rhs: &R) -> bool
     {
-        (0..N).all(|i| self.data[i] == rhs.data[i])
+        (0..32).all(|i| self.data[i] == rhs.data[i])
     }
 }
 
@@ -78,8 +79,7 @@ impl<'a> Sub<R> for &'a R
     fn sub(self, mut rhs: R) -> Self::Output
     {
         rhs -= self;
-        rhs *= ZERO - ONE;
-        return rhs;
+        return -rhs;
     }
 }
 
@@ -95,14 +95,16 @@ impl Mul<Zq> for R
     }
 }
 
-impl Div<Zq> for R
+impl Neg for R
 {
     type Output = R;
-
+    
     #[inline(always)]
-    fn div(mut self, rhs: Zq) -> Self::Output
+    fn neg(mut self) -> Self::Output
     {
-        self /= rhs;
+        for i in 0..32 {
+            self.data[i] = -self.data[i];
+        }
         return self;
     }
 }
@@ -112,7 +114,7 @@ impl<'a> AddAssign<&'a R> for R
     #[inline(always)]
     fn add_assign(&mut self, rhs: &'a R)
     {
-        for i in 0..N {
+        for i in 0..32 {
             self.data[i] += rhs.data[i];
         }
     }
@@ -123,7 +125,7 @@ impl<'a> SubAssign<&'a R> for R
     #[inline(always)]
     fn sub_assign(&mut self, rhs: &'a R)
     {
-        for i in 0..N {
+        for i in 0..32 {
             self.data[i] -= rhs.data[i];
         }
     }
@@ -134,7 +136,7 @@ impl MulAssign<Zq> for R
     #[inline(always)]
     fn mul_assign(&mut self, rhs: Zq)
     {
-        for i in 0..N {
+        for i in 0..256 {
             self.data[i] *= rhs;
         }
     }
@@ -145,30 +147,28 @@ impl DivAssign<Zq> for R
     #[inline(always)]
     fn div_assign(&mut self, rhs: Zq)
     {
-        for i in 0..N {
+        for i in 0..256 {
             self.data[i] /= rhs;
         }
     }
 }
 
-impl<'a, T> From<&'a [T; N]> for R
-    where Zq: From<T>, T: Copy
+impl<'a> From<&'a [i16]> for R
 {
-    fn from(value: &'a [T; N]) -> R {
-        let mut data: [Zq; N] = [ZERO; N];
-        for i in 0..N {
-            data[i] = Zq::from(value[i]);
-        }
-        return R {
-            data: data
-        };
+    fn from(value: &'a [i16]) -> R {
+        assert_eq!(256, value.len());
+        let f = |i: usize| Zq8::from(&value[i..(i+8)]);
+        return R::from(
+            create_array!(f(0, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 
+                136, 144, 152, 160, 168, 176, 184, 192, 200, 208, 216, 224, 232, 240, 248))
+        );
     }
 }
 
-impl From<[Zq; N]> for R
+impl From<[Zq8; 32]> for R
 {
     #[inline(always)]
-    fn from(data: [Zq; N]) -> R
+    fn from(data: [Zq8; 32]) -> R
     {
         R {
             data: data
@@ -181,8 +181,8 @@ impl Debug for R
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
         write!(f, "[")?;
-        (0..255).try_for_each(|i| write!(f, "{}, ", self.data[i]))?;
-        write!(f, "{}]", self.data[255])?;
+        (0..31).try_for_each(|i| write!(f, "{:?}, ", self.data[i]))?;
+        write!(f, "{:?}]", self.data[31])?;
         return Ok(());
     }
 }
@@ -193,16 +193,17 @@ impl Debug for R
 #[derive(Clone)]
 pub struct FourierReprR
 {
-    values: [Zq; N]
+    values: [Zq8; 32]
 }
 
 impl FourierReprR
 {
+    
     #[inline(never)]
-    fn fft<F>(mut values: [Zq; N], unity_root: F) -> [Zq; N]
+    fn fft<F>(mut values: [Zq8; 32], unity_root: F) -> [Zq8; 32]
         where F: Fn(usize) -> Zq
     {
-        // Use the Cooley–Tukey FFT algorithm (N = N):
+        // Use the Cooley–Tukey FFT algorithm (N = 256):
         // for i from 1 to log(N) do:
         //   n = 2^i
         //   Calculate the DFT of [x_j, x_j+d, x_j+2d, ..., x_j+(n-1)d]
@@ -213,9 +214,58 @@ impl FourierReprR
         // the roles each iteration)
         // Both contain the value:
         //   values[k * d + j] is the DFT with j and k
-        let mut temp: [Zq; N] = [ZERO; N];
+        let mut temp: [Zq8; 32] = [Zq8::zero(); 32];
 
         // values already contain the k=1 DFT of [x_j], so start with i = 7
+
+
+        for k in 0..1 {
+            let d = 128;
+            let old_d = 256;
+            let unity_root = Zq8::broadcast(unity_root(k * d));
+            for j in 0..d/8 {
+                temp[k * d + j] = values[k * old_d + j] + values[k * old_d + j + d] * unity_root;
+                temp[(k + 1) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
+            }
+        }
+        for k in 0..3 {
+            let d = 64;
+            let old_d = 128;
+            let unity_root = Zq8::broadcast(unity_root(k * d));
+            for j in 0..d/8 {
+                temp[k * d + j] = values[k * old_d + j] + values[k * old_d + j + d] * unity_root;
+                temp[(k + 3) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
+            }
+        }
+        for k in 0..7 {
+            let d = 32;
+            let old_d = 64;
+            let unity_root = Zq8::broadcast(unity_root(k * d));
+            for j in 0..d/8 {
+                temp[k * d + j] = values[k * old_d + j] + unity_root * values[k * old_d + j + d];
+                temp[(k + 7) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
+            }
+        }
+        for k in 0..15 {
+            let d = 16;
+            let old_d = 32;
+            let unity_root = Zq8::broadcast(unity_root(k * d));
+            for j in 0..d/8 {
+                temp[k * d + j] = values[k * old_d + j] + unity_root * values[k * old_d + j + d];
+                temp[(k + 15) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
+            }
+        }
+        for k in 0..31 {
+            let d = 8;
+            let old_d = 16;
+            let unity_root = Zq8::broadcast(unity_root(k * d));
+            for j in 0..d/8 {
+                temp[k * d + j] = values[k * old_d + j] + unity_root * values[k * old_d + j + d];
+                temp[(k + 31) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
+            }
+        }
+
+
         let mut n: usize = 1;
         let mut d: usize = 1 << 8;
         let mut old_d: usize;
@@ -277,10 +327,10 @@ impl FourierReprR
     #[inline(always)]
     pub fn inv_dft(fourier_repr: FourierReprR) -> R
     {
-        let inv_N: Zq = ONE / Zq::from(N as i16);
-        let mut result = Self::fft(fourier_repr.values, |i| UNITY_ROOTS[(N - i) & 0xFF]);
-        for i in 0..N {
-            result[i] *= inv_N;
+        let inv_256: Zq = ONE / Zq::from(256_i16);
+        let mut result = Self::fft(fourier_repr.values, |i| UNITY_ROOTS[(256 - i) & 0xFF]);
+        for i in 0..256 {
+            result[i] *= inv_256;
         }
         return R {
             data: result
@@ -290,13 +340,13 @@ impl FourierReprR
     pub fn zero() -> FourierReprR
     {
         return FourierReprR {
-            values: [ZERO; N]
+            values: [ZERO; 256]
         }
     }
 
     pub fn add_product(&mut self, fst: &FourierReprR, snd: &FourierReprR) 
     {
-        for i in 0..N {
+        for i in 0..256 {
             self.values[i] += fst.values[i] * snd.values[i];
         }
     }
@@ -306,7 +356,7 @@ impl PartialEq for FourierReprR
 {
     fn eq(&self, rhs: &FourierReprR) -> bool
     {
-        (0..N).all(|i| self.values[i] == rhs.values[i])
+        (0..256).all(|i| self.values[i] == rhs.values[i])
     }
 }
 
@@ -413,7 +463,7 @@ impl<'a> AddAssign<&'a FourierReprR> for FourierReprR
 {
     #[inline(always)]
     fn add_assign(&mut self, rhs: &'a FourierReprR) {
-        for i in 0..N {
+        for i in 0..256 {
             self.values[i] += rhs.values[i];
         }
     }
@@ -423,7 +473,7 @@ impl<'a> SubAssign<&'a FourierReprR> for FourierReprR
 {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: &'a FourierReprR) {
-        for i in 0..N {
+        for i in 0..256 {
             self.values[i] -= rhs.values[i];
         }
     }
@@ -433,7 +483,7 @@ impl<'a> MulAssign<&'a FourierReprR> for FourierReprR
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: &'a FourierReprR) {
-        for i in 0..N {
+        for i in 0..256 {
             self.values[i] *= rhs.values[i];
         }
     }
@@ -443,7 +493,7 @@ impl MulAssign<Zq> for FourierReprR
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: Zq) {
-        for i in 0..N {
+        for i in 0..256 {
             self.values[i] *= rhs;
         }
     }
@@ -454,18 +504,18 @@ impl DivAssign<Zq> for FourierReprR
     #[inline(always)]
     fn div_assign(&mut self, rhs: Zq) {
         let inv = ONE / rhs;
-        for i in 0..N {
+        for i in 0..256 {
             self.values[i] *= inv;
         }
     }
 }
 
-impl<'a, T> From<&'a [T; N]> for FourierReprR
+impl<'a, T> From<&'a [T; 256]> for FourierReprR
     where Zq: From<T>, T: Copy
 {
-    fn from(value: &'a [T; N]) -> FourierReprR {
-        let mut values: [Zq; N] = [ZERO; N];
-        for i in 0..N {
+    fn from(value: &'a [T; 256]) -> FourierReprR {
+        let mut values: [Zq; 256] = [ZERO; 256];
+        for i in 0..256 {
             values[i] = Zq::from(value[i]);
         }
         return FourierReprR {
@@ -487,15 +537,15 @@ impl Debug for FourierReprR
 
 pub struct CompressedR<const D : u16>
 {
-    data: [CompressedZq<D>; N]
+    data: [CompressedZq<D>; 256]
 }
 
 impl R
 {
     pub fn compress<const D : u16>(&self) -> CompressedR<D>
     {
-        let mut data = [CompressedZq::zero(); N];
-        for i in 0..N {
+        let mut data = [CompressedZq::zero(); 256];
+        for i in 0..256 {
             data[i] = self.data[i].compress();
         }
         return CompressedR {
@@ -508,8 +558,8 @@ impl<const D : u16> CompressedR<D>
 {
     pub fn decompress(&self) -> R
     {
-        let mut data = [ZERO; N];
-        for i in 0..N {
+        let mut data = [ZERO; 256];
+        for i in 0..256 {
             data[i] = self.data[i].decompress();
         }
         return R {
@@ -523,7 +573,7 @@ impl CompressedR<1>
     pub fn get_data(&self) -> [u8; 32]
     {
         let mut result: [u8; 32] = [0; 32];
-        for i in 0..N {
+        for i in 0..256 {
             result[i/8] |= self.data[i].get_data() << (i % 8);
         }
         return result;
@@ -531,8 +581,8 @@ impl CompressedR<1>
 
     pub fn from_data(m: [u8; 32]) -> CompressedR<1>
     {
-        let mut result: [CompressedZq<1>; N] = [CompressedZq::zero(); N];
-        for i in 0..N {
+        let mut result: [CompressedZq<1>; 256] = [CompressedZq::zero(); 256];
+        for i in 0..256 {
             result[i] = CompressedZq::from_data(m[i/8] >> (i % 8));
         }
         return CompressedR {
@@ -542,7 +592,7 @@ impl CompressedR<1>
 }
 
 #[cfg(test)]
-const ELEMENT: [i16; N] = [1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 81, 0, 1, 0, 0, 0, 0, 0, 
+const ELEMENT: [i16; 256] = [1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 81, 0, 1, 0, 0, 0, 0, 0, 
     0, 0, 0, 0, 55, 0, 0, 0, 0, 0, 0, 0, 0, 71, 0, 0, 0, 0, 0, 0, 0, 16, 0, 76, 
     13, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 84, 0, 0, 99, 0, 60, 0, 0, 0, 7680, 
     0, 0, 0, 0, 0, 26, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 0, 0, 256, 0, 0, 0, 0, 0, 0, 
@@ -555,7 +605,7 @@ const ELEMENT: [i16; N] = [1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 81, 0, 1, 0, 0, 0, 0
     0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
 
 #[cfg(test)]
-const DFT_ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663, 
+const DFT_ELEMENT: [i16; 256] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663, 
     1301, 159, 4074, 2945, 6671, 1392, 3999, 2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 
     3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704, 2348, 6823, 6135, 854, 3320, 
     2929, 6417, 7368, 535, 1491, 7271, 7666, 1256, 6093, 4767, 3442, 6055, 2757, 3953, 7391, 

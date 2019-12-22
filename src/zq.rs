@@ -86,9 +86,9 @@ impl Zq
     }
 
     // contract: Zq::From(x.representative_pos()) == x
-    pub fn representative_pos(self) -> u16
+    pub fn representative_pos(self) -> i16
     {
-        self.value as u16
+        self.value as i16
     }
 
     // contract: Zq::From(x.representative_posneg()) == x
@@ -101,7 +101,7 @@ impl Zq
         }
     }
 
-    pub fn from_perfect(value: i32) -> Zq
+    pub fn from_perfect(value: i16) -> Zq
     {
         assert!(value >= 0 && (value as u32) < Q);
         Zq {

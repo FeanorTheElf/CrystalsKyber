@@ -1,10 +1,12 @@
 use std::arch::x86_64::*;
-use std::ops::{ Add, Mul, Sub, Neg, AddAssign, MulAssign, SubAssign };
+use std::ops::{ Add, Mul, Sub, Neg, AddAssign, MulAssign, SubAssign, DivAssign };
 use std::cmp::{ PartialEq, Eq };
 use std::fmt::{ Debug };
 
-use super::zq::Zq;
-use super::const_fn;
+use super::zq::{ Zq, ONE };
+use super::util::create_array;
+use super::avx_util;
+use super::avx_util::{ constant_f32, constant_i32, constant_zero };
 
 #[cfg(test)]
 use super::zq::ZERO;
@@ -18,12 +20,9 @@ pub struct Zq8
     data: __m256i
 }
 
-unsafe fn avx_q() -> __m256i { _mm256_set1_epi32 (Q) }
-unsafe fn avx_negative_q() -> __m256i { _mm256_set1_epi32 (-Q) }
-unsafe fn avx_q_minus_one() -> __m256i { _mm256_set1_epi32 (Q-1) }
-const ONE_OVER_Q: f32 = 1. / 7681.;
-unsafe fn avx_one_over_q() -> __m256 { _mm256_set1_ps(ONE_OVER_Q) }
-unsafe fn avx_zero() -> __m256i { _mm256_setzero_si256() }
+const NEG_Q: i32 = -Q;
+const Q_DEC: i32 = Q - 1;
+const Q_INV: f32 = 1. / 7681.;
 
 macro_rules! impl_get {
     ($($ident:ident: $index:literal),*) => {
@@ -49,16 +48,23 @@ macro_rules! impl_set {
     };
 }
 
+// works only if product <= 7680*7680
 unsafe fn mod_q(product: __m256i) -> __m256i
 {
+    // use floating point arithmetic with correction
+    // in order to perform modulo using multiplication
+    // (this requires the upper bits of a 26 + 24 bit product)
+    // the floating point arithmetic gives us at least
+    // the upper bits of a 24 + 24 bit product, so correction
+    // is required (see test_modulo_q)
     let product_float: __m256 = _mm256_cvtepi32_ps(product); 
-    let quotient: __m256 = _mm256_mul_ps(product_float, avx_one_over_q());
+    let quotient: __m256 = _mm256_mul_ps(product_float, constant_f32::<Q_INV>());
     let rounded_quotient: __m256i = _mm256_cvttps_epi32(quotient);
-    let rest: __m256i = _mm256_sub_epi32(product, _mm256_mullo_epi32(rounded_quotient, avx_q()));
+    let rest: __m256i = _mm256_sub_epi32(product, _mm256_mullo_epi32(rounded_quotient, constant_i32::<Q>()));
     // apply correction: rest is now in -7681 to 2 * 7680 - 1
-    let too_small = _mm256_cmpgt_epi32(avx_zero(), rest);
-    let too_big = _mm256_cmpgt_epi32(rest, avx_q_minus_one());
-    let correction = _mm256_or_si256(_mm256_and_si256(too_small, avx_q()), _mm256_and_si256(too_big, avx_negative_q()));
+    let too_small = _mm256_cmpgt_epi32(constant_zero(), rest);
+    let too_big = _mm256_cmpgt_epi32(rest, constant_i32::<Q_DEC>());
+    let correction = _mm256_or_si256(_mm256_and_si256(too_small, constant_i32::<Q>()), _mm256_and_si256(too_big, constant_i32::<NEG_Q>()));
     return _mm256_add_epi32(rest, correction);
 }
 
@@ -77,13 +83,7 @@ impl Zq8
     pub fn sum_horizontal(&self) -> Zq
     {
         unsafe {
-            let low4: __m128i = _mm256_extractf128_si256(self.data, 0);
-            let high4: __m128i = _mm256_extractf128_si256(self.data, 1);
-            let sum4: __m128i = _mm_add_epi32(low4, high4);
-            let low2: i64 = _mm_extract_epi64(sum4, 0);
-            let high2: i64 = _mm_extract_epi64(sum4, 1);
-            let sum2: i64 = low2 + high2;
-            let mut sum: i32 = ((sum2 >> 32) + (sum2 & 0xFFFFFFFF)) as i32;
+            let mut sum: i32 = avx_util::horizontal_sum(self.data);
             if sum >= 4 * Q {
                 sum -= 4 * Q;
             }
@@ -93,20 +93,30 @@ impl Zq8
             if sum >= Q {
                 sum -= Q;
             }
-            return Zq::from_perfect(sum);
+            return Zq::from_perfect(sum as i16);
         }
     }
 
     pub fn shift_left(self, amount: usize) -> Zq8
     {
-        let i: [i32; 8] = const_fn::shift_left(amount, [0, 1, 2, 3, 4, 5, 6, 7]);
-        unsafe {
-            let index: __m256i = _mm256_setr_epi32(i[0], i[1], i[2], i[3], i[4], i[5], i[6], i[7]);
-            let result = _mm256_permutevar8x32_epi32(self.data, index);
-            return Zq8 {
-                data: result
-            };
+        Zq8 {
+            data: unsafe { avx_util::shift_left(amount, self.data) }
         }
+    }
+
+    pub fn broadcast(x: Zq) -> Zq8
+    {
+        Zq8 {
+            data: unsafe { _mm256_set1_epi32(x.representative_pos() as i32) }
+        }
+    }
+
+    pub fn transpose<const column_count: usize, const total_vector_count: usize>(value: [Zq8; total_vector_count]) -> [Zq8; total_vector_count]
+    {
+        let transposed = unsafe {
+            avx_util::transpose::<column_count, total_vector_count>(create_array(|i| value[i].data))
+        };
+        create_array(|i| Zq8 { data: transposed[i] })
     }
 }
 
@@ -115,47 +125,32 @@ impl<'a> From<&'a [Zq]> for Zq8
     fn from(value: &'a [Zq]) -> Zq8
     {
         assert_eq!(8, value.len());
-        Zq8 {
-            data: unsafe { _mm256_setr_epi32(
-                value[0].representative_pos() as i32, 
-                value[1].representative_pos() as i32, 
-                value[2].representative_pos() as i32, 
-                value[3].representative_pos() as i32, 
-                value[4].representative_pos() as i32, 
-                value[5].representative_pos() as i32, 
-                value[6].representative_pos() as i32, 
-                value[7].representative_pos() as i32) 
-            }
-        }
+        return Zq8::from(
+            create_array(|i: usize| value[i].representative_pos())
+        );
     }
 }
-
 impl<'a> From<&'a [i16]> for Zq8
 {
     fn from(value: &'a [i16]) -> Zq8
     {
         assert_eq!(8, value.len());
-        unsafe {
-            let items = _mm256_setr_epi32(value[0] as i32, 
-                value[1] as i32, 
-                value[2] as i32, 
-                value[3] as i32, 
-                value[4] as i32, 
-                value[5] as i32, 
-                value[6] as i32, 
-                value[7] as i32);
-            return Zq8 {
-                data: mod_q(items)
-            };
-        }
+        return Zq8::from(
+            create_array(|i: usize| value[i])
+        );
     }
 }
 
 impl From<[i16; 8]> for Zq8
 {
+    #[inline(always)]
     fn from(value: [i16; 8]) -> Zq8
     {
-        Zq8::from(&value[..])
+        let f = |i: usize| value[i] as i32;
+        let data = create_array!(f(0, 1, 2, 3, 4, 5, 6, 7));
+        return Zq8 {
+            data: unsafe { mod_q(avx_util::compose::<8, 1>(data)[0]) }
+        };
     }
 }
 
@@ -166,9 +161,7 @@ impl PartialEq for Zq8
     fn eq(&self, rhs: &Zq8) -> bool
     {
         unsafe {
-            let equality: __m256i = _mm256_cmpeq_epi32(self.data, rhs.data);
-            let bitmask: i32 = _mm256_movemask_epi8(equality);
-            return bitmask == !0;
+            avx_util::eq(self.data, rhs.data)
         }
     }
 }
@@ -182,48 +175,66 @@ impl Debug for Zq8
     }
 }
 
-impl<'a> AddAssign<&'a Zq8> for Zq8
+impl AddAssign<Zq8> for Zq8
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a Zq8)
+    fn add_assign(&mut self, rhs: Zq8)
     {
         unsafe {
             let sum = _mm256_add_epi32(self.data, rhs.data);
-            let too_great = _mm256_cmpgt_epi32(sum, avx_q_minus_one());
-            self.data = _mm256_add_epi32(sum, _mm256_and_si256(too_great, avx_negative_q()));
+            let too_great = _mm256_cmpgt_epi32(sum, constant_i32::<Q_DEC>());
+            self.data = _mm256_add_epi32(sum, _mm256_and_si256(too_great, constant_i32::<NEG_Q>()));
         }
     }
 }
 
-impl<'a> SubAssign<&'a Zq8> for Zq8
+impl SubAssign<Zq8> for Zq8
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a Zq8)
+    fn sub_assign(&mut self, rhs: Zq8)
     {
         unsafe {
             let difference = _mm256_sub_epi32(self.data, rhs.data);
-            let too_small = _mm256_cmpgt_epi32(avx_zero(), difference);
-            self.data = _mm256_add_epi32(difference, _mm256_and_si256(too_small, avx_q()));
+            let too_small = _mm256_cmpgt_epi32(constant_zero(), difference);
+            self.data = _mm256_add_epi32(difference, _mm256_and_si256(too_small, constant_i32::<Q>()));
         }
     }
 }
 
-impl<'a> MulAssign<&'a Zq8> for Zq8
+impl MulAssign<Zq8> for Zq8
 {
-    #[no_mangle]
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: &'a Zq8)
+    fn mul_assign(&mut self, rhs: Zq8)
     {
-        // use floating point arithmetic with correction
-        // in order to perform modulo using multiplication
-        // (this requires the upper bits of a 26 + 24 bit product)
-        // the floating point arithmetic gives us at least
-        // the upper bits of a 24 + 24 bit product, so correction
-        // is required (see test_modulo_q)
         unsafe {
             let product: __m256i = _mm256_mullo_epi32(self.data, rhs.data);
             self.data = mod_q(product);
         }
+    }
+}
+
+impl MulAssign<Zq> for Zq8
+{
+    #[inline(always)]
+    fn mul_assign(&mut self, rhs: Zq)
+    {
+        let factor = unsafe { _mm256_set1_epi32(rhs.representative_pos() as i32) };
+        *self *= Zq8 {
+            data: factor
+        };
+    }
+}
+
+impl DivAssign<Zq> for Zq8
+{
+    #[inline(always)]
+    fn div_assign(&mut self, rhs: Zq)
+    {
+        let inverse = ONE / rhs;
+        let factor = unsafe { _mm256_set1_epi32(inverse.representative_pos() as i32) };
+        *self *= Zq8 {
+            data: factor
+        };
     }
 }
 
@@ -235,81 +246,45 @@ impl Neg for Zq8
     fn neg(mut self) -> Self::Output
     {
         unsafe {
-            self.data = _mm256_sub_epi32(self.data, avx_q());
+            self.data = _mm256_sub_epi32(self.data, constant_i32::<Q>());
         }
         return self;
     }
 }
 
-impl<'a> Add<&'a Zq8> for Zq8
+impl Add<Zq8> for Zq8
 {
     type Output = Zq8;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a Zq8) -> Self::Output
+    fn add(mut self, rhs: Zq8) -> Self::Output
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a> Add<Zq8> for &'a Zq8
+impl Sub<Zq8> for Zq8
 {
     type Output = Zq8;
 
     #[inline(always)]
-    fn add(self, mut rhs: Zq8) -> Self::Output
-    {
-        rhs += self;
-        return rhs;
-    }
-}
-
-impl<'a> Sub<&'a Zq8> for Zq8
-{
-    type Output = Zq8;
-
-    #[inline(always)]
-    fn sub(mut self, rhs: &'a Zq8) -> Self::Output
+    fn sub(mut self, rhs: Zq8) -> Self::Output
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a> Sub<Zq8> for &'a Zq8
+impl Mul<Zq8> for Zq8
 {
     type Output = Zq8;
 
     #[inline(always)]
-    fn sub(self, mut rhs: Zq8) -> Self::Output
-    {
-        rhs -= self;
-        return -rhs;
-    }
-}
-
-impl<'a> Mul<&'a Zq8> for Zq8
-{
-    type Output = Zq8;
-
-    #[inline(always)]
-    fn mul(mut self, rhs: &'a Zq8) -> Self::Output
+    fn mul(mut self, rhs: Zq8) -> Self::Output
     {
         self *= rhs;
         return self;
-    }
-}
-
-impl<'a> Mul<Zq8> for &'a Zq8
-{
-    type Output = Zq8;
-
-    #[inline(always)]
-    fn mul(self, mut rhs: Zq8) -> Self::Output
-    {
-        rhs *= self;
-        return rhs;
     }
 }
 
@@ -356,10 +331,10 @@ fn test_add_sub() {
     let w: Zq8 = Zq8::from([-5609, 12, 2386, -2728, -64, 12, -8000, -12]);
     let sum = Zq8::from([-2042, 144, 818, 2704, -378, 555, -319, -333]);
     let difference = Zq8::from([1495, 120, 3727, 479, -250, 531, 319, -309]);
-    v += &w;
+    v += w;
     assert_eq!(sum, v);
-    v -= &w;
-    v -= &w;
+    v -= w;
+    v -= w;
     assert_eq!(difference, v);
 }
 
@@ -368,7 +343,7 @@ fn test_mul() {
     let mut v: Zq8 = Zq8::from([3567, 132, 6113, 5432, -314, 543, 0, -321]);
     let w: Zq8 = Zq8::from([-5609, 12, 2386, -2728, -64, 12, -8000, -12]);
     let expected = Zq8::from([-5979, 1584, 7080, -1847, 4734, 6516, 0, 3852]);
-    v *= &w;
+    v *= w;
     assert_eq!(expected, v);
 }
 
@@ -383,7 +358,7 @@ fn test_modulo_q() {
     for x in 0..7680*7680 {
         let p: i32 = x as i32;
         let f: f32 = p as f32;
-        let q: f32 = f * ONE_OVER_Q;
+        let q: f32 = f * Q_INV;
         let r: i32 = q.floor() as i32;
         let mut m: i32 = p - r * 7681;
         if m < 0 {
@@ -405,14 +380,14 @@ fn bench_add_mul(bencher: &mut test::Bencher)
         let mut result = Zq8::zero();
         for i in 0..4 {
             for j in 0..4 {
-                result += &(elements[i] * &elements[j]);
-                result += &(elements[i] * &elements[j].shift_left(1));
-                result += &(elements[i] * &elements[j].shift_left(2));
-                result += &(elements[i] * &elements[j].shift_left(3));
-                result += &(elements[i] * &elements[j].shift_left(4));
-                result += &(elements[i] * &elements[j].shift_left(5));
-                result += &(elements[i] * &elements[j].shift_left(6));
-                result += &(elements[i] * &elements[j].shift_left(7));
+                result += elements[i] * elements[j];
+                result += elements[i] * elements[j].shift_left(1);
+                result += elements[i] * elements[j].shift_left(2);
+                result += elements[i] * elements[j].shift_left(3);
+                result += elements[i] * elements[j].shift_left(4);
+                result += elements[i] * elements[j].shift_left(5);
+                result += elements[i] * elements[j].shift_left(6);
+                result += elements[i] * elements[j].shift_left(7);
             }
         }
         assert_eq!(Zq::from(4050), result.sum_horizontal());
