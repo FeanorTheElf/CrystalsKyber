@@ -14,7 +14,7 @@ mod r;
 mod m;
 
 mod avx_zq;
-// mod avx_r;
+mod avx_r;
 
 use zq::*;
 use r::*;

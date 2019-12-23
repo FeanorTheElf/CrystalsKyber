@@ -45,7 +45,6 @@ pub unsafe fn transpose<const column_count: usize, const total_vector_count: usi
             |(result_row, result_col): (usize, usize)|
         {
             let vector_begin: *const i32 = matrix_begin.offset((result_row + result_col * column_count * elements_per_vector) as isize);
-            let result_index: isize = (result_col + result_row * vector_count_per_col) as isize;
             return _mm256_i32gather_epi32(vector_begin, indices, 4);
         }
     ));

@@ -575,7 +575,7 @@ const DFT_ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 266
     6881, 1026, 4981, 3325, 4511];
 
 #[bench]
-fn test_fft(bencher: &mut test::Bencher) {
+fn bench_fft(bencher: &mut test::Bencher) {
     let element = R::from(&ELEMENT);
     let expected_fourier_reprn = FourierReprR::from(&DFT_ELEMENT);
     bencher.iter(|| {

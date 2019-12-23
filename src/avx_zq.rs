@@ -111,13 +111,14 @@ impl Zq8
         }
     }
 
-    pub fn transpose<const column_count: usize, const total_vector_count: usize>(value: [Zq8; total_vector_count]) -> [Zq8; total_vector_count]
-    {
-        let transposed = unsafe {
-            avx_util::transpose::<column_count, total_vector_count>(create_array(|i| value[i].data))
-        };
-        create_array(|i| Zq8 { data: transposed[i] })
-    }
+}
+
+pub fn transpose<const column_count: usize, const total_vector_count: usize>(value: [Zq8; total_vector_count]) -> [Zq8; total_vector_count]
+{
+    let transposed = unsafe {
+        avx_util::transpose::<column_count, total_vector_count>(create_array(|i| value[i].data))
+    };
+    create_array(|i| Zq8 { data: transposed[i] })
 }
 
 impl<'a> From<&'a [Zq]> for Zq8
@@ -130,6 +131,7 @@ impl<'a> From<&'a [Zq]> for Zq8
         );
     }
 }
+
 impl<'a> From<&'a [i16]> for Zq8
 {
     fn from(value: &'a [i16]) -> Zq8
@@ -137,6 +139,16 @@ impl<'a> From<&'a [i16]> for Zq8
         assert_eq!(8, value.len());
         return Zq8::from(
             create_array(|i: usize| value[i])
+        );
+    }
+}
+
+impl From<[Zq; 8]> for Zq8
+{
+    fn from(value: [Zq; 8]) -> Zq8
+    {
+        return Zq8::from(
+            create_array(|i: usize| value[i].representative_pos())
         );
     }
 }

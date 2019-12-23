@@ -1,5 +1,6 @@
 use super::zq::*;
 use super::avx_zq::*;
+use super::util;
 
 use std::ops::{ Add, Mul, Div, Sub, Neg, AddAssign, MulAssign, DivAssign, SubAssign };
 use std::cmp::{ PartialEq, Eq };
@@ -7,12 +8,14 @@ use std::convert::From;
 use std::fmt::{ Formatter, Debug };
 
 pub const N: usize = 256;
+const vec_size: usize = 8;
+const vec_count: usize = 32;
 
 // Type of elements in the ring R := Zq[X] / (X^256 + 1)
 #[derive(Clone)]
 pub struct R
 {
-    data: [Zq8; 32]
+    data: [Zq8; vec_count]
 }
 
 impl R
@@ -20,7 +23,7 @@ impl R
     pub fn zero() -> FourierReprR
     {
         return FourierReprR {
-            values: [Zq8::zero(); 32]
+            values: [Zq8::zero(); vec_count]
         }
     }
 }
@@ -29,7 +32,7 @@ impl PartialEq for R
 {
     fn eq(&self, rhs: &R) -> bool
     {
-        (0..32).all(|i| self.data[i] == rhs.data[i])
+        (0..vec_count).all(|i| self.data[i] == rhs.data[i])
     }
 }
 
@@ -102,7 +105,7 @@ impl Neg for R
     #[inline(always)]
     fn neg(mut self) -> Self::Output
     {
-        for i in 0..32 {
+        for i in 0..vec_count {
             self.data[i] = -self.data[i];
         }
         return self;
@@ -114,7 +117,7 @@ impl<'a> AddAssign<&'a R> for R
     #[inline(always)]
     fn add_assign(&mut self, rhs: &'a R)
     {
-        for i in 0..32 {
+        for i in 0..vec_count {
             self.data[i] += rhs.data[i];
         }
     }
@@ -125,7 +128,7 @@ impl<'a> SubAssign<&'a R> for R
     #[inline(always)]
     fn sub_assign(&mut self, rhs: &'a R)
     {
-        for i in 0..32 {
+        for i in 0..vec_count {
             self.data[i] -= rhs.data[i];
         }
     }
@@ -136,7 +139,7 @@ impl MulAssign<Zq> for R
     #[inline(always)]
     fn mul_assign(&mut self, rhs: Zq)
     {
-        for i in 0..256 {
+        for i in 0..vec_count {
             self.data[i] *= rhs;
         }
     }
@@ -147,28 +150,27 @@ impl DivAssign<Zq> for R
     #[inline(always)]
     fn div_assign(&mut self, rhs: Zq)
     {
-        for i in 0..256 {
+        for i in 0..vec_count {
             self.data[i] /= rhs;
         }
     }
 }
 
-impl<'a> From<&'a [i16]> for R
+impl<'a> From<&'a [i16; 256]> for R
 {
-    fn from(value: &'a [i16]) -> R {
+    fn from(value: &'a [i16; 256]) -> R 
+    {
         assert_eq!(256, value.len());
-        let f = |i: usize| Zq8::from(&value[i..(i+8)]);
-        return R::from(
-            create_array!(f(0, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 
-                136, 144, 152, 160, 168, 176, 184, 192, 200, 208, 216, 224, 232, 240, 248))
-        );
+        return R::from(util::create_array(|i| 
+            Zq8::from(&value[i * vec_size..(i+1) * vec_size])
+        ));
     }
 }
 
-impl From<[Zq8; 32]> for R
+impl From<[Zq8; vec_count]> for R
 {
     #[inline(always)]
-    fn from(data: [Zq8; 32]) -> R
+    fn from(data: [Zq8; vec_count]) -> R
     {
         R {
             data: data
@@ -193,124 +195,71 @@ impl Debug for R
 #[derive(Clone)]
 pub struct FourierReprR
 {
-    values: [Zq8; 32]
+    values: [Zq8; vec_count]
 }
 
 impl FourierReprR
 {
-    
-    #[inline(never)]
-    fn fft<F>(mut values: [Zq8; 32], unity_root: F) -> [Zq8; 32]
+
+    #[inline(always)]
+    fn fft_iter_nxd<F>(dst: &mut [Zq8; vec_count], src: &[Zq8; vec_count], i: usize, unity_root: F)
         where F: Fn(usize) -> Zq
     {
-        // Use the Cooley–Tukey FFT algorithm (N = 256):
-        // for i from 1 to log(N) do:
-        //   n = 2^i
-        //   Calculate the DFT of [x_j, x_j+d, x_j+2d, ..., x_j+(n-1)d]
-        //   for each j in 0..d and each k in 0..n where d=N/n
-        //   using only the DFTs from the last iteration
-        // During each loop, values and temp will hold
-        // the DFTs of this and the last loop (they change
-        // the roles each iteration)
-        // Both contain the value:
-        //   values[k * d + j] is the DFT with j and k
-        let mut temp: [Zq8; 32] = [Zq8::zero(); 32];
+        let n = 1 << i;
+        let d = 1 << (8 - i);
+        let old_d = d << 1;
+        let old_n = n >> 1;
+        let d_vec = d / vec_size;
+        let old_d_vec = old_d / vec_size;
 
-        // values already contain the k=1 DFT of [x_j], so start with i = 7
-
-
-        for k in 0..1 {
-            let d = 128;
-            let old_d = 256;
+        for k in 0..old_n {
             let unity_root = Zq8::broadcast(unity_root(k * d));
-            for j in 0..d/8 {
-                temp[k * d + j] = values[k * old_d + j] + values[k * old_d + j + d] * unity_root;
-                temp[(k + 1) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
+            for j in 0..d_vec {
+                dst[k * d_vec + j] = src[k * old_d_vec + j] + src[k * old_d_vec + j + d_vec] * unity_root;
+                dst[(k + old_n) * d_vec + j] = src[k * old_d_vec + j] - src[k * old_d_vec + j + d_vec] * unity_root;
             }
         }
-        for k in 0..3 {
-            let d = 64;
-            let old_d = 128;
-            let unity_root = Zq8::broadcast(unity_root(k * d));
-            for j in 0..d/8 {
-                temp[k * d + j] = values[k * old_d + j] + values[k * old_d + j + d] * unity_root;
-                temp[(k + 3) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
-            }
-        }
-        for k in 0..7 {
-            let d = 32;
-            let old_d = 64;
-            let unity_root = Zq8::broadcast(unity_root(k * d));
-            for j in 0..d/8 {
-                temp[k * d + j] = values[k * old_d + j] + unity_root * values[k * old_d + j + d];
-                temp[(k + 7) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
-            }
-        }
-        for k in 0..15 {
-            let d = 16;
-            let old_d = 32;
-            let unity_root = Zq8::broadcast(unity_root(k * d));
-            for j in 0..d/8 {
-                temp[k * d + j] = values[k * old_d + j] + unity_root * values[k * old_d + j + d];
-                temp[(k + 15) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
-            }
-        }
-        for k in 0..31 {
-            let d = 8;
-            let old_d = 16;
-            let unity_root = Zq8::broadcast(unity_root(k * d));
-            for j in 0..d/8 {
-                temp[k * d + j] = values[k * old_d + j] + unity_root * values[k * old_d + j + d];
-                temp[(k + 31) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
-            }
-        }
+    }
 
+    #[inline(always)]
+    fn fft_iter_dxn<F>(dst: &mut [Zq8; vec_count], src: &[Zq8; vec_count], i: usize, unity_root: F)
+        where F: Fn(usize) -> Zq
+    {
+        let d = 1 << (8 - i);
+        let n = 1 << i;
+        let old_n = n >> 1;
+        let n_vec = n / vec_size;
+        let old_n_vec = old_n / vec_size;
 
-        let mut n: usize = 1;
-        let mut d: usize = 1 << 8;
-        let mut old_d: usize;
-        for _i in 0..4 {
-            n = n << 1;
-            d = d >> 1;
-            old_d = d << 1;
-            for k in 0..n/2 {
-                // w := n-th root of unity, unity_root := w^k
-                let unity_root = unity_root(k * d);
-                for j in 0..d {
-                    // calculate the k-DFT of [x_j, x_j+d, x_j+2d, ..., x_j+(n-1)d],
-                    // have x_j + w^k * x_j+d + w^2k * x_j+2d + ...
-                    //  = (x_j + w^2k * x_j+2d + w^4k * w_j+4d + ...)  (1)
-                    //  + (x_j+d + w^2k * x_j+3d + w^4k * w_j+4d + ...) * w  (2)
-                    // (1) is the k-DFT of [x_j, x_j+2d, x_j+4d, ...], so it has been
-                    //     calculated in the last step (with j_old = j, d_old = 2d)
-                    // (2) is w * the k-DFT of [x_j+d, x_j+3d, x_j+5d, ...], so it has
-                    //     been calculated in the last step (with j_old = j + d < d_old, d_old = 2d)
-                    // (1) is at the location old_values [k * last_d]
-                    temp[k * d + j] = values[k * old_d + j] + unity_root * values[k * old_d + j + d];
-
-                    // Use the trick that w^(n/2) = -1, so (1) above stays the same
-                    // (we get a factor of w^(2l * (k+n/2)) = w^2lk * w^ln = w^2lk * 1 in each term)
-                    // and (2) above is negated
-                    // (we get a factor of w^((2l+1) * (k+n/2)) = w^(2l+1)k * w^2l(n/2) * w^(n/2) 
-                    // = w^(2l+1)k * 1 * w^(n/2) = w^(2l+1)k * -1 in each term)
-                    temp[(k + n/2) * d + j] = values[k * old_d + j] - unity_root * values[k * old_d + j + d];
-                }
-            }
-
-            // This corresponds to the next iteration of the loop, but we
-            // unroll it so that no swap between values and temp is necessary
-            // (so now values and temp switch roles, otherwise it is the same)
-            n = n << 1;
-            d = d >> 1;
-            old_d = d << 1;
-            for k in 0..n/2 {
-                let unity_root = unity_root(k * d);
-                for j in 0..d {
-                    values[k * d + j] = temp[k * old_d + j] + unity_root * temp[k * old_d + j + d];
-                    values[(k + n/2) * d + j] = temp[k * old_d + j] - unity_root * temp[k * old_d + j + d];
-                }
+        for j in 0..d {
+            for vec_k in 0..old_n_vec {
+                let unity_root = Zq8::from(util::create_array(|dk| unity_root((vec_k * vec_size + dk) * d)));
+                dst[j * n_vec + vec_k] = src[j * old_n_vec + vec_k] + src[(j + d) * old_n_vec + vec_k] * unity_root;
+                dst[j * n_vec + vec_k + old_n_vec] = src[j * old_n_vec + vec_k] - src[(j + d) * old_n_vec + vec_k] * unity_root;
             }
         }
+    }
+
+    #[inline(never)]
+    fn fft<F>(mut values: [Zq8; vec_count], unity_root: F) -> [Zq8; vec_count]
+        where F: Fn(usize) -> Zq
+    {
+        let mut temp: [Zq8; vec_count] = [Zq8::zero(); vec_count];
+
+        Self::fft_iter_nxd(&mut temp, &values, 1, &unity_root);
+        Self::fft_iter_nxd(&mut values, &temp, 2, &unity_root);
+        Self::fft_iter_nxd(&mut temp, &values, 3, &unity_root);
+        Self::fft_iter_nxd(&mut values, &temp, 4, &unity_root);
+        Self::fft_iter_nxd(&mut temp, &values, 5, &unity_root);
+
+        // temp corresponds to nxd = 32x8 array
+        temp = transpose::<8, 32>(temp);
+        // temp corresponds to dxn = 8x32 array
+
+        Self::fft_iter_dxn(&mut values, &temp, 6, &unity_root);
+        Self::fft_iter_dxn(&mut temp, &values, 7, &unity_root);
+        Self::fft_iter_dxn(&mut values, &temp, 8, &unity_root);
+
         return values;
     }
 
@@ -329,7 +278,7 @@ impl FourierReprR
     {
         let inv_256: Zq = ONE / Zq::from(256_i16);
         let mut result = Self::fft(fourier_repr.values, |i| UNITY_ROOTS[(256 - i) & 0xFF]);
-        for i in 0..256 {
+        for i in 0..vec_count {
             result[i] *= inv_256;
         }
         return R {
@@ -340,13 +289,13 @@ impl FourierReprR
     pub fn zero() -> FourierReprR
     {
         return FourierReprR {
-            values: [ZERO; 256]
+            values: [Zq8::zero(); vec_count]
         }
     }
 
     pub fn add_product(&mut self, fst: &FourierReprR, snd: &FourierReprR) 
     {
-        for i in 0..256 {
+        for i in 0..vec_count {
             self.values[i] += fst.values[i] * snd.values[i];
         }
     }
@@ -356,7 +305,7 @@ impl PartialEq for FourierReprR
 {
     fn eq(&self, rhs: &FourierReprR) -> bool
     {
-        (0..256).all(|i| self.values[i] == rhs.values[i])
+        (0..vec_count).all(|i| self.values[i] == rhs.values[i])
     }
 }
 
@@ -463,7 +412,7 @@ impl<'a> AddAssign<&'a FourierReprR> for FourierReprR
 {
     #[inline(always)]
     fn add_assign(&mut self, rhs: &'a FourierReprR) {
-        for i in 0..256 {
+        for i in 0..vec_count {
             self.values[i] += rhs.values[i];
         }
     }
@@ -473,7 +422,7 @@ impl<'a> SubAssign<&'a FourierReprR> for FourierReprR
 {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: &'a FourierReprR) {
-        for i in 0..256 {
+        for i in 0..vec_count {
             self.values[i] -= rhs.values[i];
         }
     }
@@ -483,7 +432,7 @@ impl<'a> MulAssign<&'a FourierReprR> for FourierReprR
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: &'a FourierReprR) {
-        for i in 0..256 {
+        for i in 0..vec_count {
             self.values[i] *= rhs.values[i];
         }
     }
@@ -493,7 +442,7 @@ impl MulAssign<Zq> for FourierReprR
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: Zq) {
-        for i in 0..256 {
+        for i in 0..vec_count {
             self.values[i] *= rhs;
         }
     }
@@ -504,22 +453,20 @@ impl DivAssign<Zq> for FourierReprR
     #[inline(always)]
     fn div_assign(&mut self, rhs: Zq) {
         let inv = ONE / rhs;
-        for i in 0..256 {
+        for i in 0..vec_count {
             self.values[i] *= inv;
         }
     }
 }
 
-impl<'a, T> From<&'a [T; 256]> for FourierReprR
-    where Zq: From<T>, T: Copy
+impl<'a> From<&'a [i16]> for FourierReprR
 {
-    fn from(value: &'a [T; 256]) -> FourierReprR {
-        let mut values: [Zq; 256] = [ZERO; 256];
-        for i in 0..256 {
-            values[i] = Zq::from(value[i]);
-        }
+    fn from(value: &'a [i16]) -> FourierReprR {
+        assert_eq!(256, value.len());
         return FourierReprR {
-            values: values
+            values: util::create_array(|i| 
+                Zq8::from(&value[i * vec_size..(i+1) * vec_size])
+            )
         };
     }
 }
@@ -529,65 +476,9 @@ impl Debug for FourierReprR
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
         write!(f, "[")?;
-        (0..255).try_for_each(|i| write!(f, "{}, ", self.values[i]))?;
-        write!(f, "{}]", self.values[255])?;
+        (0..31).try_for_each(|i| write!(f, "{:?}, ", self.values[i]))?;
+        write!(f, "{:?}]", self.values[31])?;
         return Ok(());
-    }
-}
-
-pub struct CompressedR<const D : u16>
-{
-    data: [CompressedZq<D>; 256]
-}
-
-impl R
-{
-    pub fn compress<const D : u16>(&self) -> CompressedR<D>
-    {
-        let mut data = [CompressedZq::zero(); 256];
-        for i in 0..256 {
-            data[i] = self.data[i].compress();
-        }
-        return CompressedR {
-            data: data
-        };
-    }
-}
-
-impl<const D : u16> CompressedR<D>
-{
-    pub fn decompress(&self) -> R
-    {
-        let mut data = [ZERO; 256];
-        for i in 0..256 {
-            data[i] = self.data[i].decompress();
-        }
-        return R {
-            data: data
-        };
-    }
-}
-
-impl CompressedR<1>
-{
-    pub fn get_data(&self) -> [u8; 32]
-    {
-        let mut result: [u8; 32] = [0; 32];
-        for i in 0..256 {
-            result[i/8] |= self.data[i].get_data() << (i % 8);
-        }
-        return result;
-    }
-
-    pub fn from_data(m: [u8; 32]) -> CompressedR<1>
-    {
-        let mut result: [CompressedZq<1>; 256] = [CompressedZq::zero(); 256];
-        for i in 0..256 {
-            result[i] = CompressedZq::from_data(m[i/8] >> (i % 8));
-        }
-        return CompressedR {
-            data: result
-        };
     }
 }
 
@@ -625,9 +516,9 @@ const DFT_ELEMENT: [i16; 256] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2
     6881, 1026, 4981, 3325, 4511];
 
 #[bench]
-fn test_fft(bencher: &mut test::Bencher) {
+fn bench_fft(bencher: &mut test::Bencher) {
     let element = R::from(&ELEMENT);
-    let expected_fourier_reprn = FourierReprR::from(&DFT_ELEMENT);
+    let expected_fourier_reprn = FourierReprR::from(&DFT_ELEMENT[..]);
     bencher.iter(|| {
         let fourier_repr = FourierReprR::dft(element.clone());
         assert_eq!(expected_fourier_reprn, fourier_repr);
@@ -636,7 +527,7 @@ fn test_fft(bencher: &mut test::Bencher) {
 
 #[test]
 fn test_inv_fft() {
-    let fourier_repr = FourierReprR::from(&DFT_ELEMENT);
+    let fourier_repr = FourierReprR::from(&DFT_ELEMENT[..]);
     let expected_element = R::from(&ELEMENT);
     let element = FourierReprR::inv_dft(fourier_repr);
     assert_eq!(expected_element, element);
