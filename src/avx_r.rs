@@ -156,11 +156,22 @@ impl DivAssign<Zq> for R
     }
 }
 
-impl<'a> From<&'a [i16; 256]> for R
+impl<'a> From<&'a [i16]> for R
 {
-    fn from(value: &'a [i16; 256]) -> R 
+    fn from(value: &'a [i16]) -> R 
     {
-        assert_eq!(256, value.len());
+        assert_eq!(N, value.len());
+        return R::from(util::create_array(|i| 
+            Zq8::from(&value[i * vec_size..(i+1) * vec_size])
+        ));
+    }
+}
+
+impl<'a> From<&'a [Zq]> for R
+{
+    fn from(value: &'a [Zq]) -> R 
+    {
+        assert_eq!(N, value.len());
         return R::from(util::create_array(|i| 
             Zq8::from(&value[i * vec_size..(i+1) * vec_size])
         ));
@@ -276,10 +287,10 @@ impl FourierReprR
     #[inline(always)]
     pub fn inv_dft(fourier_repr: FourierReprR) -> R
     {
-        let inv_256: Zq = ONE / Zq::from(256_i16);
-        let mut result = Self::fft(fourier_repr.values, |i| UNITY_ROOTS[(256 - i) & 0xFF]);
+        let inv_N: Zq = ONE / Zq::from(N as i16);
+        let mut result = Self::fft(fourier_repr.values, |i| UNITY_ROOTS[(N - i) & 0xFF]);
         for i in 0..vec_count {
-            result[i] *= inv_256;
+            result[i] *= inv_N;
         }
         return R {
             data: result
@@ -462,7 +473,19 @@ impl DivAssign<Zq> for FourierReprR
 impl<'a> From<&'a [i16]> for FourierReprR
 {
     fn from(value: &'a [i16]) -> FourierReprR {
-        assert_eq!(256, value.len());
+        assert_eq!(N, value.len());
+        return FourierReprR {
+            values: util::create_array(|i| 
+                Zq8::from(&value[i * vec_size..(i+1) * vec_size])
+            )
+        };
+    }
+}
+
+impl<'a> From<&'a [Zq]> for FourierReprR
+{
+    fn from(value: &'a [Zq]) -> FourierReprR {
+        assert_eq!(N, value.len());
         return FourierReprR {
             values: util::create_array(|i| 
                 Zq8::from(&value[i * vec_size..(i+1) * vec_size])
@@ -483,7 +506,7 @@ impl Debug for FourierReprR
 }
 
 #[cfg(test)]
-const ELEMENT: [i16; 256] = [1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 81, 0, 1, 0, 0, 0, 0, 0, 
+const ELEMENT: [i16; N] = [1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 81, 0, 1, 0, 0, 0, 0, 0, 
     0, 0, 0, 0, 55, 0, 0, 0, 0, 0, 0, 0, 0, 71, 0, 0, 0, 0, 0, 0, 0, 16, 0, 76, 
     13, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 84, 0, 0, 99, 0, 60, 0, 0, 0, 7680, 
     0, 0, 0, 0, 0, 26, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 0, 0, 256, 0, 0, 0, 0, 0, 0, 
@@ -496,7 +519,7 @@ const ELEMENT: [i16; 256] = [1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 81, 0, 1, 0, 0, 0,
     0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
 
 #[cfg(test)]
-const DFT_ELEMENT: [i16; 256] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663, 
+const DFT_ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663, 
     1301, 159, 4074, 2945, 6671, 1392, 3999, 2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 
     3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704, 2348, 6823, 6135, 854, 3320, 
     2929, 6417, 7368, 535, 1491, 7271, 7666, 1256, 6093, 4767, 3442, 6055, 2757, 3953, 7391, 
@@ -517,7 +540,7 @@ const DFT_ELEMENT: [i16; 256] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2
 
 #[bench]
 fn bench_fft(bencher: &mut test::Bencher) {
-    let element = R::from(&ELEMENT);
+    let element = R::from(&ELEMENT[..]);
     let expected_fourier_reprn = FourierReprR::from(&DFT_ELEMENT[..]);
     bencher.iter(|| {
         let fourier_repr = FourierReprR::dft(element.clone());
@@ -528,14 +551,14 @@ fn bench_fft(bencher: &mut test::Bencher) {
 #[test]
 fn test_inv_fft() {
     let fourier_repr = FourierReprR::from(&DFT_ELEMENT[..]);
-    let expected_element = R::from(&ELEMENT);
+    let expected_element = R::from(&ELEMENT[..]);
     let element = FourierReprR::inv_dft(fourier_repr);
     assert_eq!(expected_element, element);
 }
 
 #[test]
 fn test_scalar_mul_div() {
-    let mut element = R::from(&ELEMENT);
+    let mut element = R::from(&ELEMENT[..]);
     let mut fourier_repr = FourierReprR::dft(element.clone());
     element *= Zq::from(653_i16);
     fourier_repr *= Zq::from(653_i16);
@@ -548,7 +571,7 @@ fn test_scalar_mul_div() {
 
 #[test]
 fn test_add_sub() {
-    let mut element = R::from(&ELEMENT);
+    let mut element = R::from(&ELEMENT[..]);
     let mut fourier_repr = FourierReprR::dft(element.clone());
     let base_element = element.clone();
     let base_fourier_repr = fourier_repr.clone();
@@ -560,5 +583,5 @@ fn test_add_sub() {
     element -= &base_element;
     fourier_repr -= &base_fourier_repr;
     assert_eq!(element, FourierReprR::inv_dft(fourier_repr));
-    assert_eq!(R::from(&ELEMENT), element);
+    assert_eq!(R::from(&ELEMENT[..]), element);
 }

@@ -1,13 +1,16 @@
 use super::zq::*;
 use super::r::*;
+use super::util;
 
 use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, DivAssign, SubAssign };
 use std::convert::From;
 
+const dim: usize = 3;
+
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct M 
+pub struct M
 {
-    data: [FourierReprR; 3]
+    data: [FourierReprR; dim]
 }
 
 
@@ -68,7 +71,7 @@ impl<'a> Mul<&'a M> for &'a M
     fn mul(self, rhs: &'a M) -> FourierReprR
     {
         let mut result = FourierReprR::zero();
-        for i in 0..3 {
+        for i in 0..dim {
             result.add_product(&self.data[i], &rhs.data[i]);
         }
         return result;
@@ -92,7 +95,7 @@ impl<'a> AddAssign<&'a M> for M
     #[inline(always)]
     fn add_assign(&mut self, rhs: &'a M) 
     {
-        for i in 0..3 {
+        for i in 0..dim {
             self.data[i] += &rhs.data[i];
         }
     }
@@ -103,7 +106,7 @@ impl<'a> SubAssign<&'a M> for M
     #[inline(always)]
     fn sub_assign(&mut self, rhs: &'a M) 
     {
-        for i in 0..3 {
+        for i in 0..dim {
             self.data[i] -= &rhs.data[i];
         }
     }
@@ -114,7 +117,7 @@ impl<'a> MulAssign<&'a FourierReprR> for M
     #[inline(always)]
     fn mul_assign(&mut self, rhs: &'a FourierReprR) 
     {
-        for i in 0..3 {
+        for i in 0..dim {
             self.data[i] *= rhs;
         }
     }
@@ -125,7 +128,7 @@ impl MulAssign<Zq> for M
     #[inline(always)]
     fn mul_assign(&mut self, rhs: Zq) 
     {
-        for i in 0..3 {
+        for i in 0..dim {
             self.data[i] *= rhs;
         }
     }
@@ -136,25 +139,26 @@ impl DivAssign<Zq> for M
     #[inline(always)]
     fn div_assign(&mut self, rhs: Zq) 
     {
-        for i in 0..3 {
+        for i in 0..dim {
             self.data[i] /= rhs;
         }
     }
 }
 
-impl<'a> From<&'a [FourierReprR; 3]> for M
+impl<'a> From<&'a [FourierReprR]> for M
 {
     #[inline(always)]
-    fn from(data: &'a [FourierReprR; 3]) -> M
+    fn from(data: &'a [FourierReprR]) -> M
     {
-        Self::from(data.clone())
+        assert_eq!(dim, data.len());
+        Self::from(util::create_array(|i| data[i].clone()))
     }
 }
 
-impl From<[FourierReprR; 3]> for M
+impl From<[FourierReprR; dim]> for M
 {
     #[inline(always)]
-    fn from(data: [FourierReprR; 3]) -> M
+    fn from(data: [FourierReprR; dim]) -> M
     {
         M {
             data: data
@@ -162,10 +166,10 @@ impl From<[FourierReprR; 3]> for M
     }
 }
 
-impl From<[[FourierReprR; 3]; 3]> for Mat
+impl From<[[FourierReprR; dim]; dim]> for Mat
 {
     #[inline(always)]
-    fn from(data: [[FourierReprR; 3]; 3]) -> Mat
+    fn from(data: [[FourierReprR; dim]; dim]) -> Mat
     {
         let [fst, snd, trd] = data;
         Mat {
@@ -177,7 +181,7 @@ impl From<[[FourierReprR; 3]; 3]> for Mat
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Mat
 {
-    rows: [M; 3]
+    rows: [M; dim]
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -224,9 +228,9 @@ impl<'a> Mul<&'a M> for TransposedMat<'a>
     #[inline(always)]
     fn mul(self, rhs: &'a M) -> M 
     {
-        let mut result: [FourierReprR; 3] = [FourierReprR::zero(), FourierReprR::zero(), FourierReprR::zero()];
-        for row in 0..3 {
-            for col in 0..3 {
+        let mut result: [FourierReprR; dim] = [FourierReprR::zero(), FourierReprR::zero(), FourierReprR::zero()];
+        for row in 0..dim {
+            for col in 0..dim {
                 result[row].add_product(&self.data.rows[col].data[row], &rhs.data[col]);
             }
         }
@@ -238,7 +242,7 @@ impl<'a> Mul<&'a M> for TransposedMat<'a>
 
 pub struct CompressedM<const D : u16>
 {
-    data: [CompressedR<D>; 3]
+    data: [CompressedR<D>; dim]
 }
 
 impl M
