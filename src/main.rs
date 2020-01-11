@@ -23,8 +23,8 @@ use m::*;
 
 use sha3::digest::{ ExtendableOutput, Input, XofReader };
 
-type R = ref_r::R;
-type FourierReprR = ref_r::FourierReprR;
+type R = avx_r::R;
+type FourierReprR = avx_r::FourierReprR;
 type M = m::M<R>;
 type Mat = m::Mat<R>;
 

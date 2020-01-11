@@ -6,7 +6,7 @@ use std::fmt::{ Debug };
 use super::zq::{ Zq, ONE };
 use super::util::create_array;
 use super::avx_util;
-use super::avx_util::{ constant_f32, constant_i32, constant_zero };
+use super::avx_util::{ constant_f32, constant_i32, constant_zero, constant_u32 };
 
 #[cfg(test)]
 use super::zq::ZERO;
@@ -16,7 +16,7 @@ pub const Q: i32 = 7681;
 #[derive(Clone, Copy)]
 pub struct Zq8
 {
-    // 8 x 32bit integer
+    // 8 x 32bit integer, in positive representation (i.e. in 0..Q-1)
     data: __m256i
 }
 
@@ -297,6 +297,48 @@ impl Mul<Zq8> for Zq8
     {
         self *= rhs;
         return self;
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct CompressedZq8<const D: u16>
+{
+    pub data: __m256i
+}
+
+impl Zq8
+{
+
+    pub fn compress<const D: u16>(self) -> CompressedZq8<D>
+    {
+        // this floating point approach always leads to the right result:
+        // for each x, n, |0.5 - (x * n / 7681) mod 1| >= |0.5 - (x * 1 / 7681) mod 1|
+        // >= |0.5 - (3840 / 7681) mod 1| >= 6.509569066531773E-5 
+        // > (error in floating point representation of 1/7681) * 7681
+        unsafe {
+            let representation_pos_float = _mm256_cvtepi32_ps(self.data);
+            let factor = constant_f32::<{(1 << D) as f32 / Q as f32}>();
+            let unrounded_result = _mm256_mul_ps(representation_pos_float, factor);
+            let rounded_result = _mm256_cvtps_epi32(unrounded_result);
+            let result = _mm256_and_si256(constant_u32::<{(1 << D) as u32 - 1}>(), rounded_result);
+            CompressedZq8 {
+                data: result
+            }
+        }
+    }
+    
+    // Returns the element y of Zq for which
+    // y.representative_pos() is nearest to 2^d/q * x 
+    pub fn decompress<const D: u16>(x: CompressedZq8<D>) -> Zq8
+    {
+        unsafe {
+            let factor = constant_f32::<{Q as f32 / (1 << D) as f32}>();
+            let data_float = _mm256_cvtepi32_ps(x.data);
+            let rounded = _mm256_cvtps_epi32(_mm256_mul_ps(data_float, factor));
+            Zq8 {
+                data: rounded
+            }
+        }
     }
 }
 

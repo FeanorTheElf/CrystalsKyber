@@ -8,6 +8,11 @@ pub unsafe fn constant_i32<const C: i32>() -> __m256i
     _mm256_set1_epi32(C)
 }
 
+pub unsafe fn constant_u32<const C: u32>() -> __m256i
+{
+    _mm256_set1_epi32(std::mem::transmute(C))
+}
+
 pub unsafe fn constant_f32<const C: f32>() -> __m256
 {
     _mm256_set1_ps(C)

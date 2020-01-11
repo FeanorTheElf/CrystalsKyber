@@ -1,13 +1,16 @@
 use super::zq::*;
 use super::avx_zq::*;
+use super::r::*;
 use super::util;
+use super::avx_util;
 
-use std::ops::{ Add, Mul, Div, Sub, Neg, AddAssign, MulAssign, DivAssign, SubAssign };
+use std::arch::x86_64::*;
+
+use std::ops::{ Add, Mul, Sub, Neg, AddAssign, MulAssign, SubAssign };
 use std::cmp::{ PartialEq, Eq };
 use std::convert::From;
 use std::fmt::{ Formatter, Debug };
 
-pub const N: usize = 256;
 const VEC_SIZE: usize = 8;
 const VEC_COUNT: usize = 32;
 
@@ -16,16 +19,6 @@ const VEC_COUNT: usize = 32;
 pub struct R
 {
     data: [Zq8; VEC_COUNT]
-}
-
-impl R
-{
-    pub fn zero() -> FourierReprR
-    {
-        return FourierReprR {
-            values: [Zq8::zero(); VEC_COUNT]
-        }
-    }
 }
 
 impl PartialEq for R
@@ -145,17 +138,6 @@ impl MulAssign<Zq> for R
     }
 }
 
-impl DivAssign<Zq> for R
-{
-    #[inline(always)]
-    fn div_assign(&mut self, rhs: Zq)
-    {
-        for i in 0..VEC_COUNT {
-            self.data[i] /= rhs;
-        }
-    }
-}
-
 impl<'a> From<&'a [i16]> for R
 {
     fn from(value: &'a [i16]) -> R 
@@ -167,11 +149,10 @@ impl<'a> From<&'a [i16]> for R
     }
 }
 
-impl<'a> From<&'a [Zq]> for R
+impl<'a> From<[Zq; N]> for R
 {
-    fn from(value: &'a [Zq]) -> R 
+    fn from(value: [Zq; N]) -> R 
     {
-        assert_eq!(N, value.len());
         return R::from(util::create_array(|i| 
             Zq8::from(&value[i * VEC_SIZE..(i+1) * VEC_SIZE])
         ));
@@ -197,6 +178,51 @@ impl Debug for R
         (0..31).try_for_each(|i| write!(f, "{:?}, ", self.data[i]))?;
         write!(f, "{:?}]", self.data[31])?;
         return Ok(());
+    }
+}
+
+impl RingElement for R
+{
+    type FourierRepr = FourierReprR;
+
+    fn zero() -> R
+    {
+        return R {
+            data: [Zq8::zero(); VEC_COUNT]
+        }
+    }
+
+    fn dft(self) -> FourierReprR
+    {
+        FourierReprR::dft(self)
+    }
+
+    fn compress<const D: u16>(&self) -> CompressedR<D>
+    {
+        unsafe {
+            let data: [__m256i; VEC_COUNT] = util::create_array(|i| {
+                let element: CompressedZq8<D> = self.data[i].compress();
+                return element.data;
+            });
+            let compressed_values = avx_util::decompose::<32, 256>(data);
+            CompressedR {
+                data: util::create_array(|i| CompressedZq { data: compressed_values[i] as u16 })
+            }
+        }
+    }
+
+    fn decompress<const D: u16>(x: &CompressedR<D>) -> R
+    {
+        let data: [i32; N] = util::create_array(|i| x.data[i].data as i32);
+        let vectorized_data = unsafe {
+            avx_util::compose::<N, VEC_COUNT>(data)
+        };
+        R {
+            data: util::create_array(|i| {
+                let compressed: CompressedZq8<D> = CompressedZq8 { data:  vectorized_data[i] };
+                Zq8::decompress(compressed)
+            })
+        }
     }
 }
 
@@ -276,7 +302,7 @@ impl FourierReprR
 
     // Calculates the fourier representation of an element in R
     #[inline(always)]
-    pub fn dft(r: R) -> FourierReprR
+    fn dft(r: R) -> FourierReprR
     {
         FourierReprR {
             values: Self::fft(r.data, |i| UNITY_ROOTS[i])
@@ -285,7 +311,7 @@ impl FourierReprR
 
     // Calculates the element in R with the given fourier representation
     #[inline(always)]
-    pub fn inv_dft(fourier_repr: FourierReprR) -> R
+    fn inv_dft(fourier_repr: FourierReprR) -> R
     {
         let inv_n: Zq = ONE / Zq::from(N as i16);
         let mut result = Self::fft(fourier_repr.values, |i| UNITY_ROOTS[(N - i) & 0xFF]);
@@ -295,20 +321,6 @@ impl FourierReprR
         return R {
             data: result
         };
-    }
-
-    pub fn zero() -> FourierReprR
-    {
-        return FourierReprR {
-            values: [Zq8::zero(); VEC_COUNT]
-        }
-    }
-
-    pub fn add_product(&mut self, fst: &FourierReprR, snd: &FourierReprR) 
-    {
-        for i in 0..VEC_COUNT {
-            self.values[i] += fst.values[i] * snd.values[i];
-        }
     }
 }
 
@@ -407,18 +419,6 @@ impl<'a> Sub<FourierReprR> for &'a FourierReprR
     }
 }
 
-impl Div<Zq> for FourierReprR
-{
-    type Output = FourierReprR;
-
-    #[inline(always)]
-    fn div(mut self, rhs: Zq) -> Self::Output
-    {
-        self /= rhs;
-        return self;
-    }
-}
-
 impl<'a> AddAssign<&'a FourierReprR> for FourierReprR
 {
     #[inline(always)]
@@ -459,17 +459,6 @@ impl MulAssign<Zq> for FourierReprR
     }
 }
 
-impl DivAssign<Zq> for FourierReprR
-{
-    #[inline(always)]
-    fn div_assign(&mut self, rhs: Zq) {
-        let inv = ONE / rhs;
-        for i in 0..VEC_COUNT {
-            self.values[i] *= inv;
-        }
-    }
-}
-
 impl<'a> From<&'a [i16]> for FourierReprR
 {
     fn from(value: &'a [i16]) -> FourierReprR {
@@ -502,6 +491,38 @@ impl Debug for FourierReprR
         (0..31).try_for_each(|i| write!(f, "{:?}, ", self.values[i]))?;
         write!(f, "{:?}]", self.values[31])?;
         return Ok(());
+    }
+}
+
+impl RingFourierRepr for FourierReprR
+{
+    type StdRepr = R;
+    
+    fn zero() -> FourierReprR
+    {
+        return FourierReprR {
+            values: [Zq8::zero(); VEC_COUNT]
+        }
+    }
+
+    fn add_product(&mut self, fst: &FourierReprR, snd: &FourierReprR) 
+    {
+        for i in 0..VEC_COUNT {
+            self.values[i] += fst.values[i] * snd.values[i];
+        }
+    }
+
+    fn mul_scalar(&mut self, x: Zq)
+    {
+        let broadcast_x = Zq8::broadcast(x);
+        for i in 0..VEC_COUNT {
+            self.values[i] *= broadcast_x;
+        }
+    }
+
+    fn inv_dft(self) -> R
+    {
+        FourierReprR::inv_dft(self)
     }
 }
 
@@ -564,8 +585,8 @@ fn test_scalar_mul_div() {
     fourier_repr *= Zq::from(653_i16);
     assert_eq!(element, FourierReprR::inv_dft(fourier_repr.clone()));
 
-    element /= Zq::from(5321_i16);
-    fourier_repr /= Zq::from(5321_i16);
+    element *= ONE / Zq::from(5321_i16);
+    fourier_repr *= ONE / Zq::from(5321_i16);
     assert_eq!(element, FourierReprR::inv_dft(fourier_repr.clone()));
 }
 
@@ -584,4 +605,13 @@ fn test_add_sub() {
     fourier_repr -= &base_fourier_repr;
     assert_eq!(element, FourierReprR::inv_dft(fourier_repr));
     assert_eq!(R::from(&ELEMENT[..]), element);
+}
+
+#[test]
+fn test_compress() {
+    let mut element = R::from(&DFT_ELEMENT[..]);
+    let compressed: CompressedR<3_u16> = element.compress();
+    println!("{:?}", compressed);
+    element = R::decompress(&compressed);
+    assert_eq!(Zq8::from(&[5761, 6721, 960, 6721, 0, 5761, 3840, 3840][..]), element.data[0]);
 }

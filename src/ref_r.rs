@@ -426,10 +426,10 @@ impl MulAssign<Zq> for FourierReprR
     }
 }
 
-impl<'a, T> From<&'a [T; N]> for FourierReprR
-    where Zq: From<T>, T: Copy
+impl<'a> From<&'a [i16]> for FourierReprR
 {
-    fn from(value: &'a [T; N]) -> FourierReprR {
+    fn from(value: &'a [i16]) -> FourierReprR {
+        assert_eq!(N, value.len());
         let mut values: [Zq; N] = [ZERO; N];
         for i in 0..N {
             values[i] = Zq::from(value[i]);
@@ -516,7 +516,7 @@ const DFT_ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 266
 #[bench]
 fn bench_fft(bencher: &mut test::Bencher) {
     let element = R::from(&ELEMENT[..]);
-    let expected_fourier_reprn = FourierReprR::from(&DFT_ELEMENT);
+    let expected_fourier_reprn = FourierReprR::from(&DFT_ELEMENT[..]);
     bencher.iter(|| {
         let fourier_repr = FourierReprR::dft(element.clone());
         assert_eq!(expected_fourier_reprn, fourier_repr);
@@ -525,7 +525,7 @@ fn bench_fft(bencher: &mut test::Bencher) {
 
 #[test]
 fn test_inv_fft() {
-    let fourier_repr = FourierReprR::from(&DFT_ELEMENT);
+    let fourier_repr = FourierReprR::from(&DFT_ELEMENT[..]);
     let expected_element = R::from(&ELEMENT[..]);
     let element = FourierReprR::inv_dft(fourier_repr);
     assert_eq!(expected_element, element);
