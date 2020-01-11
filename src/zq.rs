@@ -231,10 +231,18 @@ impl From<i16> for Zq
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct CompressedZq<const D : u16>
+#[derive(Clone, Copy)]
+pub struct CompressedZq<const D: u16>
 {
-    data: u16
+    pub data: u16
+}
+
+impl<const D: u16> Debug for CompressedZq<D>
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
+    {
+        write!(f, "{} [0..{}]", self.data, 1 << D)
+    }
 }
 
 impl Zq 
@@ -274,12 +282,12 @@ impl<const D: u16> CompressedZq<D>
 
 impl CompressedZq<1>
 {
-    pub fn get_data(&self) -> u8
+    pub fn get_bit(&self) -> u8
     {
         self.data as u8
     }
 
-    pub fn from_data(m: u8) -> CompressedZq<1>
+    pub fn from_bit(m: u8) -> CompressedZq<1>
     {
         CompressedZq {
             data: (m & 1) as u16

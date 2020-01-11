@@ -228,6 +228,7 @@ impl<T: RingElement> From<[[T::FourierRepr; DIM]; DIM]> for Mat<T>
     }
 }
 
+#[derive(Debug)]
 pub struct CompressedM<const D : u16>
 {
     data: [CompressedR<D>; DIM]

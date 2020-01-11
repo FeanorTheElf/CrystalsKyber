@@ -129,7 +129,21 @@ fn expand_matrix(seed: &[u8; 32]) -> Mat
 
 fn main() 
 {
-    println!("{}", std::mem::size_of::<PK>());
+    let matrix_seed = [186, 203, 37, 232, 216, 184, 94, 78, 3, 131, 61, 210, 236, 36, 7, 14, 175, 128, 72, 102, 223, 101, 60, 28, 157, 205, 28, 55, 135, 93, 19, 33];
+    let secret_seed = [194, 76, 38, 216, 214, 43, 172, 134, 181, 97, 182, 181, 162, 190, 28, 151, 161, 129, 176, 109, 111, 12, 83, 58, 79, 220, 223, 207, 190, 191, 4, 98];
+    let enc_seed = [221, 222, 74, 103, 3, 143, 117, 20, 254, 227, 59, 53, 154, 129, 5, 5, 237, 42, 84, 72, 172, 195, 156, 153, 99, 80, 43, 85, 166, 64, 137, 74];
+
+    let (sk, pk) = key_gen(matrix_seed, secret_seed);
+    let mut input: Message = [0; 32];
+    input[0] = 1;
+    input[2] = 0xF0;
+    input[12] = 0x1A;
+    let ciphertext = enc(&pk, input, enc_seed);
+    let plaintext = dec(&sk, ciphertext);
+    println!("{:?}", plaintext);
+    println!("Ciphertext: {}", std::mem::size_of::<Ciphertext>());
+    println!("Secret Key: {}", std::mem::size_of::<SK>());
+    println!("Public Key: {}", std::mem::size_of::<PK>());
 }
 
 #[bench]
@@ -146,7 +160,8 @@ fn bench_all(bencher: &mut test::Bencher) {
         let (sk, pk) = key_gen(matrix_seed, secret_seed);
         let mut expected_message: Message = [0; 32];
         expected_message[0] = 1;
-        expected_message[10] = 1;
+        expected_message[2] = 0xF0;
+        expected_message[12] = 0x1A;
         let ciphertext = enc(&pk, expected_message, enc_seed);
         let message = dec(&sk, ciphertext);
         for i in 0..32 {

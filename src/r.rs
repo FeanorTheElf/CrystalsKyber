@@ -44,13 +44,28 @@ pub struct CompressedR<const D : u16>
     pub data: [CompressedZq<D>; N]
 }
 
+impl<const D : u16> std::fmt::Debug for CompressedR<D>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result
+    {
+        write!(f, "[")?;
+        for i in 0..N-1 {
+            write!(f, "{}", self.data[i].data)?;
+            write!(f, ",")?;
+        }
+        write!(f, "{}", self.data[N - 1].data)?;
+        write!(f, "] | 0..{}", 1 << D)?;
+        return Ok(());
+    }
+}
+
 impl CompressedR<1>
 {
     pub fn get_data(&self) -> [u8; 32]
     {
         let mut result: [u8; 32] = [0; 32];
         for i in 0..N {
-            result[i/8] |= self.data[i].get_data() << (i % 8);
+            result[i/8] |= self.data[i].get_bit() << (i % 8);
         }
         return result;
     }
@@ -59,7 +74,7 @@ impl CompressedR<1>
     {
         let mut result: [CompressedZq<1>; N] = [CompressedZq::zero(); N];
         for i in 0..N {
-            result[i] = CompressedZq::from_data(m[i/8] >> (i % 8));
+            result[i] = CompressedZq::from_bit(m[i/8] >> (i % 8));
         }
         return CompressedR {
             data: result
