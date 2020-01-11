@@ -2,163 +2,151 @@ use super::zq::*;
 use super::r::*;
 use super::util;
 
-use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, DivAssign, SubAssign };
+use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, SubAssign };
 use std::convert::From;
 
-const dim: usize = 3;
+const DIM: usize = 3;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct M
+pub struct M<T: RingElement>
 {
-    data: [FourierReprR; dim]
+    data: [T::FourierRepr; DIM]
 }
 
-
-impl<'a> Add<&'a M> for M
+impl<'a, T: RingElement> Add<&'a M<T>> for M<T>
 {
-    type Output = M;
+    type Output = M<T>;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a M) -> M
+    fn add(mut self, rhs: &'a M<T>) -> M<T>
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a> Add<M> for &'a M
+impl<'a, T: RingElement> Add<M<T>> for &'a M<T>
 {
-    type Output = M;
+    type Output = M<T>;
 
     #[inline(always)]
-    fn add(self, mut rhs: M) -> M
+    fn add(self, mut rhs: M<T>) -> M<T>
     {
         rhs += self;
         return rhs;
     }
 }
 
-impl<'a> Sub<&'a M> for M
+impl<'a, T: RingElement> Sub<&'a M<T>> for M<T>
 {
-    type Output = M;
+    type Output = M<T>;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a M) -> M
+    fn sub(mut self, rhs: &'a M<T>) -> M<T>
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a> Sub<M> for &'a M
+impl<'a, T: RingElement> Sub<M<T>> for &'a M<T>
 {
-    type Output = M;
+    type Output = M<T>;
 
     #[inline(always)]
-    fn sub(self, mut rhs: M) -> M
+    fn sub(self, mut rhs: M<T>) -> M<T>
     {
         rhs -= self;
-        rhs *= ZERO - ONE;
+        rhs *= NEG_ONE;
         return rhs;
     }
 }
 
-impl<'a> Mul<&'a M> for &'a M
+impl<'a, T: RingElement> Mul<&'a M<T>> for &'a M<T>
 {
-    type Output = FourierReprR;
+    type Output = T::FourierRepr;
 
     #[inline(always)]
-    fn mul(self, rhs: &'a M) -> FourierReprR
+    fn mul(self, rhs: &'a M<T>) -> T::FourierRepr
     {
-        let mut result = FourierReprR::zero();
-        for i in 0..dim {
+        let mut result = T::FourierRepr::zero();
+        for i in 0..DIM {
             result.add_product(&self.data[i], &rhs.data[i]);
         }
         return result;
     }
 }
 
-impl<'a> Mul<&'a FourierReprR> for M
+impl<'a, T: RingElement> Mul<&'a T::FourierRepr> for M<T>
 {
-    type Output = M;
+    type Output = M<T>;
 
     #[inline(always)]
-    fn mul(mut self, rhs: &'a FourierReprR) -> M
+    fn mul(mut self, rhs: &'a T::FourierRepr) -> M<T>
     {
         self *= rhs;
         return self;
     }
 }
 
-impl<'a> AddAssign<&'a M> for M
+impl<'a, T: RingElement> AddAssign<&'a M<T>> for M<T>
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a M) 
+    fn add_assign(&mut self, rhs: &'a M<T>) 
     {
-        for i in 0..dim {
+        for i in 0..DIM {
             self.data[i] += &rhs.data[i];
         }
     }
 }
 
-impl<'a> SubAssign<&'a M> for M
+impl<'a, T: RingElement> SubAssign<&'a M<T>> for M<T>
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a M) 
+    fn sub_assign(&mut self, rhs: &'a M<T>) 
     {
-        for i in 0..dim {
+        for i in 0..DIM {
             self.data[i] -= &rhs.data[i];
         }
     }
 }
 
-impl<'a> MulAssign<&'a FourierReprR> for M
+impl<'a, T: RingElement> MulAssign<&'a T::FourierRepr> for M<T>
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: &'a FourierReprR) 
+    fn mul_assign(&mut self, rhs: &'a T::FourierRepr) 
     {
-        for i in 0..dim {
+        for i in 0..DIM {
             self.data[i] *= rhs;
         }
     }
 }
 
-impl MulAssign<Zq> for M
+impl<T: RingElement> MulAssign<Zq> for M<T>
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: Zq) 
     {
-        for i in 0..dim {
-            self.data[i] *= rhs;
+        for i in 0..DIM {
+            self.data[i].mul_scalar(rhs);
         }
     }
 }
 
-impl DivAssign<Zq> for M
+impl<'a, T: RingElement> From<&'a [T::FourierRepr]> for M<T>
 {
     #[inline(always)]
-    fn div_assign(&mut self, rhs: Zq) 
+    fn from(data: &'a [T::FourierRepr]) -> M<T>
     {
-        for i in 0..dim {
-            self.data[i] /= rhs;
-        }
-    }
-}
-
-impl<'a> From<&'a [FourierReprR]> for M
-{
-    #[inline(always)]
-    fn from(data: &'a [FourierReprR]) -> M
-    {
-        assert_eq!(dim, data.len());
+        assert_eq!(DIM, data.len());
         Self::from(util::create_array(|i| data[i].clone()))
     }
 }
 
-impl From<[FourierReprR; dim]> for M
+impl<T: RingElement> From<[T::FourierRepr; DIM]> for M<T>
 {
     #[inline(always)]
-    fn from(data: [FourierReprR; dim]) -> M
+    fn from(data: [T::FourierRepr; DIM]) -> M<T>
     {
         M {
             data: data
@@ -166,33 +154,21 @@ impl From<[FourierReprR; dim]> for M
     }
 }
 
-impl From<[[FourierReprR; dim]; dim]> for Mat
+#[derive(PartialEq, Eq, Clone)]
+pub struct Mat<T: RingElement>
 {
-    #[inline(always)]
-    fn from(data: [[FourierReprR; dim]; dim]) -> Mat
-    {
-        let [fst, snd, trd] = data;
-        Mat {
-            rows: [M::from(fst), M::from(snd), M::from(trd)]
-        }
-    }
+    rows: [M<T>; DIM]
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct Mat
+#[derive(PartialEq, Eq, Clone)]
+pub struct TransposedMat<'a, T: RingElement>
 {
-    rows: [M; dim]
+    data: &'a Mat<T>
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct TransposedMat<'a>
+impl<T: RingElement> Mat<T>
 {
-    data: &'a Mat
-}
-
-impl Mat 
-{
-    pub fn transpose<'a>(&'a self) -> TransposedMat<'a>
+    pub fn transpose<'a>(&'a self) -> TransposedMat<'a, T>
     {
         TransposedMat {
             data: self
@@ -200,20 +176,20 @@ impl Mat
     }
 }
 
-impl<'a> TransposedMat<'a>
+impl<'a, T: RingElement> TransposedMat<'a, T>
 {
-    pub fn transpose(&'a self) -> &'a Mat
+    pub fn transpose(&'a self) -> &'a Mat<T>
     {
         self.data
     }
 }
 
-impl<'a> Mul<&'a M> for &'a Mat
+impl<'a, T: RingElement> Mul<&'a M<T>> for &'a Mat<T>
 {
-    type Output = M;
+    type Output = M<T>;
 
     #[inline(always)]
-    fn mul(self, rhs: &'a M) -> M 
+    fn mul(self, rhs: &'a M<T>) -> M<T> 
     {
         M {
             data: [&self.rows[0] * rhs, &self.rows[1] * rhs, &self.rows[2] * rhs]
@@ -221,16 +197,16 @@ impl<'a> Mul<&'a M> for &'a Mat
     }
 }
 
-impl<'a> Mul<&'a M> for TransposedMat<'a>
+impl<'a, T: RingElement> Mul<&'a M<T>> for TransposedMat<'a, T>
 {
-    type Output = M;
+    type Output = M<T>;
 
     #[inline(always)]
-    fn mul(self, rhs: &'a M) -> M 
+    fn mul(self, rhs: &'a M<T>) -> M<T>
     {
-        let mut result: [FourierReprR; dim] = [FourierReprR::zero(), FourierReprR::zero(), FourierReprR::zero()];
-        for row in 0..dim {
-            for col in 0..dim {
+        let mut result: [T::FourierRepr; DIM] = util::create_array(|_i| T::FourierRepr::zero());
+        for row in 0..DIM {
+            for col in 0..DIM {
                 result[row].add_product(&self.data.rows[col].data[row], &rhs.data[col]);
             }
         }
@@ -240,32 +216,41 @@ impl<'a> Mul<&'a M> for TransposedMat<'a>
     }
 }
 
-pub struct CompressedM<const D : u16>
+impl<T: RingElement> From<[[T::FourierRepr; DIM]; DIM]> for Mat<T>
 {
-    data: [CompressedR<D>; dim]
-}
-
-impl M
-{
-    pub fn compress<const D : u16>(self) -> CompressedM<D>
+    #[inline(always)]
+    fn from(data: [[T::FourierRepr; DIM]; DIM]) -> Mat<T>
     {
-        let [fst, snd, trd] = self.data;
-        CompressedM {
-            data: [FourierReprR::inv_dft(fst).compress(), 
-                FourierReprR::inv_dft(snd).compress(), 
-                FourierReprR::inv_dft(trd).compress()]
+        let [fst, snd, trd] = data;
+        Mat {
+            rows: [M::from(fst), M::from(snd), M::from(trd)]
         }
     }
 }
 
-impl<const D : u16> CompressedM<D>
+pub struct CompressedM<const D : u16>
 {
-    pub fn decompress(&self) -> M
+    data: [CompressedR<D>; DIM]
+}
+
+impl<T: RingElement> M<T>
+{
+    pub fn compress<const D: u16>(self) -> CompressedM<D>
+    {
+        let [fst, snd, trd] = self.data;
+        CompressedM {
+            data: [RingFourierRepr::inv_dft(fst).compress(), 
+                RingFourierRepr::inv_dft(snd).compress(), 
+                RingFourierRepr::inv_dft(trd).compress()]
+        }
+    }
+
+    pub fn decompress<const D: u16>(x: &CompressedM<D>) -> M<T>
     {
         M {
-            data: [FourierReprR::dft(self.data[0].decompress()), 
-                FourierReprR::dft(self.data[1].decompress()), 
-                FourierReprR::dft(self.data[2].decompress())]
+            data: [T::dft(T::decompress(&x.data[0])),
+                T::dft(T::decompress(&x.data[1])), 
+                T::dft(T::decompress(&x.data[2]))]
         }
     }
 }

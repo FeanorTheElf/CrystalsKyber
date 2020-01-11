@@ -113,10 +113,10 @@ impl Zq8
 
 }
 
-pub fn transpose<const column_count: usize, const total_vector_count: usize>(value: [Zq8; total_vector_count]) -> [Zq8; total_vector_count]
+pub fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUNT: usize>(value: [Zq8; VEC_COUNT]) -> [Zq8; VEC_COUNT]
 {
     let transposed = unsafe {
-        avx_util::transpose::<column_count, total_vector_count>(create_array(|i| value[i].data))
+        avx_util::transpose_vectorized_matrix::<COL_COUNT, VEC_COUNT>(create_array(|i| value[i].data))
     };
     create_array(|i| Zq8 { data: transposed[i] })
 }

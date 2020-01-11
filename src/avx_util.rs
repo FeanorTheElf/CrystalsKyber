@@ -3,14 +3,14 @@ use std::mem::MaybeUninit;
 
 use super::util;
 
-pub unsafe fn constant_i32<const c: i32>() -> __m256i
+pub unsafe fn constant_i32<const C: i32>() -> __m256i
 {
-    _mm256_set1_epi32(c)
+    _mm256_set1_epi32(C)
 }
 
-pub unsafe fn constant_f32<const c: f32>() -> __m256
+pub unsafe fn constant_f32<const C: f32>() -> __m256
 {
-    _mm256_set1_ps(c)
+    _mm256_set1_ps(C)
 }
 
 pub unsafe fn constant_zero() -> __m256i
@@ -23,28 +23,29 @@ pub unsafe fn rising_indices() -> __m256i
     _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7)
 }
 
-pub unsafe fn transpose<const column_count: usize, const total_vector_count: usize>(value: [__m256i; total_vector_count]) -> [__m256i; total_vector_count]
+pub unsafe fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUNT: usize>(value: [__m256i; VEC_COUNT]) -> [__m256i; VEC_COUNT]
 {
-    const elements_per_vector: usize = 8;
+    const VEC_SIZE: usize = 8;
 
-    assert_eq!(total_vector_count, value.len());
-    assert!(total_vector_count % column_count == 0);
+    assert_eq!(VEC_COUNT, value.len());
+    assert!(VEC_COUNT % COL_COUNT == 0);
 
-    let vector_count_per_col: usize = total_vector_count / column_count;
-    let indices: __m256i = _mm256_setr_epi32(0, 
-        column_count as i32, 
-        column_count as i32 * 2, 
-        column_count as i32 * 3,
-        column_count as i32 * 4,
-        column_count as i32 * 5,
-        column_count as i32 * 6,
-        column_count as i32 * 7);
+    let vector_count_per_col: usize = VEC_COUNT / COL_COUNT;
+    let indices: __m256i = _mm256_setr_epi32(
+        0, 
+        COL_COUNT as i32, 
+        COL_COUNT as i32 * 2, 
+        COL_COUNT as i32 * 3,
+        COL_COUNT as i32 * 4,
+        COL_COUNT as i32 * 5,
+        COL_COUNT as i32 * 6,
+        COL_COUNT as i32 * 7);
     
     let matrix_begin: *const i32 = std::mem::transmute(value.as_ptr());
-    return util::create_array_it(util::cartesian(0..column_count, 0..vector_count_per_col).map(
+    return util::create_array_it(util::cartesian(0..COL_COUNT, 0..vector_count_per_col).map(
             |(result_row, result_col): (usize, usize)|
         {
-            let vector_begin: *const i32 = matrix_begin.offset((result_row + result_col * column_count * elements_per_vector) as isize);
+            let vector_begin: *const i32 = matrix_begin.offset((result_row + result_col * COL_COUNT * VEC_SIZE) as isize);
             return _mm256_i32gather_epi32(vector_begin, indices, 4);
         }
     ));
@@ -70,20 +71,20 @@ pub unsafe fn shift_left(amount: usize, x: __m256i) -> __m256i
 }
 
 #[inline(always)]
-pub unsafe fn compose<const in_len: usize, const out_len: usize>(x: [i32; in_len]) -> [__m256i; out_len]
+pub unsafe fn compose<const IN: usize, const OUT: usize>(x: [i32; IN]) -> [__m256i; OUT]
 {
-    assert_eq!(in_len, out_len * 8);
+    assert_eq!(IN, OUT * 8);
     return util::create_array(|i| _mm256_setr_epi32(
         x[i * 8 + 0], x[i * 8 + 1], x[i * 8 + 2], x[i * 8 + 3], 
         x[i * 8 + 4], x[i * 8 + 5], x[i * 8 + 6], x[i * 8 + 7]));
 }
 
 #[inline(always)]
-pub unsafe fn decompose<const in_len: usize, const out_len: usize>(x: [__m256i; in_len]) -> [i32; out_len]
+pub unsafe fn decompose<const IN: usize, const OUT: usize>(x: [__m256i; IN]) -> [i32; OUT]
 {
-    assert_eq!(in_len * 8, out_len);
-    let mut result: MaybeUninit<[i32; out_len]> = MaybeUninit::uninit();
-    for i in 0..in_len {
+    assert_eq!(IN * 8, OUT);
+    let mut result: MaybeUninit<[i32; OUT]> = MaybeUninit::uninit();
+    for i in 0..IN {
         let current_ptr = (*result.as_mut_ptr()).as_mut_ptr().offset((i * 8) as isize);
         std::ptr::write(current_ptr.offset(0), _mm256_extract_epi32(x[i], 0));
         std::ptr::write(current_ptr.offset(1), _mm256_extract_epi32(x[i], 1));
@@ -109,7 +110,7 @@ pub unsafe fn eq(x: __m256i, y: __m256i) -> bool
 fn test_transpose() {
     unsafe {
         let matrix: [__m256i; 4] = compose::<32, 4>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]);
-        let transposed = decompose::<4, 32>(transpose::<4, 4>(matrix));
+        let transposed = decompose::<4, 32>(transpose_vectorized_matrix::<4, 4>(matrix));
         let expected: [i32; 32] = [0, 4, 8, 12, 16, 20, 24, 28, 1, 5, 9, 13, 17, 21, 25, 29, 2, 6, 10, 14, 18, 22, 26, 30, 3, 7, 11, 15, 19, 23, 27, 31];
         assert_eq!(expected, transposed);
     }
@@ -120,7 +121,7 @@ fn test_transpose_greater() {
     unsafe {
         let matrix: [__m256i; 8] = compose::<64, 8>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 
             29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]);
-        let transposed = decompose::<8, 64>(transpose::<4, 8>(matrix));
+        let transposed = decompose::<8, 64>(transpose_vectorized_matrix::<4, 8>(matrix));
         let expected: [i32; 64] = [0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61,
             2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62, 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63];
         assert_eq!(expected[0..32], transposed[0..32]);

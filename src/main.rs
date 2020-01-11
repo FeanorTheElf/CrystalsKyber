@@ -1,4 +1,4 @@
-#![allow(dead_code, non_snake_case, non_upper_case_globals)]
+#![allow(dead_code)]
 #![feature(test)]
 #![feature(const_generics)]
 
@@ -13,13 +13,19 @@ mod zq;
 mod r;
 mod m;
 
+mod ref_r;
 mod avx_zq;
 mod avx_r;
 
 use zq::*;
 use r::*;
-use m::*;
+use m::CompressedM;
 use rand::prelude::*;
+
+type R = ref_r::R;
+type FourierReprR = ref_r::FourierReprR;
+type M = m::M<R>;
+type Mat = m::Mat<R>;
 
 fn sample_centered_binomial_distribution(random: u8) -> i8
 {
@@ -44,9 +50,9 @@ fn sample_m_centered_binomial_distribution<RNG>(rng: &mut RNG) -> M
     where RNG: FnMut() -> u32
 {
     return M::from([
-        FourierReprR::dft(sample_r_centered_binomial_distribution(rng)),
-        FourierReprR::dft(sample_r_centered_binomial_distribution(rng)),
-        FourierReprR::dft(sample_r_centered_binomial_distribution(rng))
+        sample_r_centered_binomial_distribution(rng).dft(),
+        sample_r_centered_binomial_distribution(rng).dft(),
+        sample_r_centered_binomial_distribution(rng).dft()
     ]);
 }
 
@@ -56,7 +62,7 @@ fn uniform_r(rng: &mut ThreadRng) -> FourierReprR
     for i in 0..256 {
         result[i] = Zq::from(rng.gen_range(0, 7681) as i16);
     }
-    return FourierReprR::dft(R::from(result));
+    return R::from(result).dft();
 }
 
 const COMPRESSION_VECTOR: u16 = 11;
@@ -72,35 +78,36 @@ fn enc<RNG>(pk: &PK, plaintext: Message, mut rng: RNG) -> Ciphertext
 {
     let r = sample_m_centered_binomial_distribution(&mut rng);
     let e1 = sample_m_centered_binomial_distribution(&mut rng);
-    let e2 = FourierReprR::dft(sample_r_centered_binomial_distribution(&mut rng));
+    let e2 = sample_r_centered_binomial_distribution(&mut rng).dft();
     let u = pk.1.transpose() * &r + &e1;
-    let t = pk.0.decompress();
-    let message = CompressedR::from_data(plaintext).decompress();
-    let v = (&t * &r) + &e2 + &FourierReprR::dft(message); 
-    return (u.compress(), FourierReprR::inv_dft(v).compress());
+    let t = M::decompress(&pk.0);
+    let message = R::decompress(&CompressedR::from_data(plaintext));
+    let v = (&t * &r) + &e2 + &message.dft(); 
+    return (u.compress(), v.inv_dft().compress());
 }
 
 fn dec(sk: &SK, c: Ciphertext) -> Message
 {
-    let m = c.1.decompress() - &FourierReprR::inv_dft(sk * &c.0.decompress());
+    let m = R::decompress(&c.1) - &(sk * &M::decompress(&c.0)).inv_dft();
     return m.compress().get_data();
 }
 
 fn key_gen(rng: &mut ThreadRng) -> (SK, PK)
 {
-    let mut A_data: [[FourierReprR; 3]; 3] = [[FourierReprR::zero(), FourierReprR::zero(), FourierReprR::zero()],
+    let mut a_data: [[FourierReprR; 3]; 3] = [
+        [FourierReprR::zero(), FourierReprR::zero(), FourierReprR::zero()],
         [FourierReprR::zero(), FourierReprR::zero(), FourierReprR::zero()],
         [FourierReprR::zero(), FourierReprR::zero(), FourierReprR::zero()]];
     for row in 0..3 {
         for col in 0..3 {
-            A_data[row][col] = uniform_r(rng);
+            a_data[row][col] = uniform_r(rng);
         }
     }
-    let A = Mat::from(A_data);
+    let a = Mat::from(a_data);
     let s: M = sample_m_centered_binomial_distribution(&mut || rng.next_u32());
     let e: M = sample_m_centered_binomial_distribution(&mut || rng.next_u32());
-    let b: M = &A * &s + &e;
-    return (s, (b.compress(), A));
+    let b: M = &a * &s + &e;
+    return (s, (b.compress(), a));
 }
 
 fn main() 

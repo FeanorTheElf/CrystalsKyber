@@ -22,23 +22,23 @@ pub const fn shift_left(amount: usize, values: [i32; 8]) -> [i32; 8]
     ]
 }
 
-pub fn create_array_it<I, const n: usize>(mut it: I) -> [I::Item; n]
+pub fn create_array_it<I, const N: usize>(mut it: I) -> [I::Item; N]
     where I: Iterator
 {
     unsafe {
-        let mut result: MaybeUninit<[I::Item; n]> = MaybeUninit::uninit();
+        let mut result: MaybeUninit<[I::Item; N]> = MaybeUninit::uninit();
         let result_ptr = (*result.as_mut_ptr()).as_mut_ptr();
-        for i in 0..n {
+        for i in 0..N {
             std::ptr::write(result_ptr.offset(i as isize), it.next().unwrap());
         }
         return result.assume_init();
     }
 }
 
-pub fn create_array<T, F, const n: usize>(f: F) -> [T; n]
+pub fn create_array<T, F, const N: usize>(f: F) -> [T; N]
     where F: FnMut(usize) -> T
 {
-    return create_array_it((0..n).map(f));
+    return create_array_it((0..N).map(f));
 }
 
 pub struct CartesianIterator<I, J>

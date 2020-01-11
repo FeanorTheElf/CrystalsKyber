@@ -14,6 +14,7 @@ pub const Q: u32 = 7681;
 
 pub const ZERO: Zq = Zq { value: 0 };
 pub const ONE: Zq = Zq { value: 1 };
+pub const NEG_ONE: Zq = Zq { value: Q - 1 };
 
 pub const UNITY_ROOTS: [Zq; 256] = zq_arr![1, 198, 799, 4582, 878, 4862, 2551, 5833, 2784, 5881, 
     4607, 5828, 1794, 1886, 4740, 1438, 527, 4493, 6299, 2880, 1846, 4501, 202, 1591, 97, 3844, 
@@ -231,7 +232,7 @@ impl From<i16> for Zq
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct CompressedZq<const d : u16>
+pub struct CompressedZq<const D : u16>
 {
     data: u16
 }
@@ -240,30 +241,30 @@ impl Zq
 {
     // Returns the element y in 0, ..., 2^d - 1 such
     // that q/2^n * y is nearest to x.representative_pos()
-    pub fn compress<const d: u16>(self) -> CompressedZq<d>
+    pub fn compress<const D: u16>(self) -> CompressedZq<D>
     {
         // this floating point approach always leads to the right result:
         // for each x, n, |0.5 - (x * n / 7681) mod 1| >= |0.5 - (x * 1 / 7681) mod 1|
         // >= |0.5 - (3840 / 7681) mod 1| >= 6.509569066531773E-5 
         // > (error in floating point representation of 1/7681) * 7681
-        let n = (1 << d) as f32;
+        let n = (1 << D) as f32;
         CompressedZq {
-            data: (self.representative_pos() as f32 * n / Q as f32).round() as u16 % (1 << d)
+            data: (self.representative_pos() as f32 * n / Q as f32).round() as u16 % (1 << D)
         }
+    }
+    
+    // Returns the element y of Zq for which
+    // y.representative_pos() is nearest to 2^d/q * x 
+    pub fn decompress<const D: u16>(x: CompressedZq<D>) -> Zq
+    {
+        let n = (1 << D) as f32;
+        Zq::from((x.data as f32 * Q as f32 / n).round() as i16)
     }
 }
 
-impl<const d: u16> CompressedZq<d>
+impl<const D: u16> CompressedZq<D>
 {
-    // Returns the element y of Zq for which
-    // y.representative_pos() is nearest to 2^d/q * x 
-    pub fn decompress(self) -> Zq
-    {
-        let n = (1 << d) as f32;
-        Zq::from((self.data as f32 * Q as f32 / n).round() as i16)
-    }
-
-    pub fn zero() -> CompressedZq<d>
+    pub fn zero() -> CompressedZq<D>
     {
         CompressedZq {
             data: 0
