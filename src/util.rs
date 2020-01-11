@@ -22,7 +22,7 @@ pub const fn shift_left(amount: usize, values: [i32; 8]) -> [i32; 8]
     ]
 }
 
-pub fn create_array_it<I, const N: usize>(mut it: I) -> [I::Item; N]
+pub fn create_array_it<I, const N: usize>(it: &mut I) -> [I::Item; N]
     where I: Iterator
 {
     unsafe {
@@ -38,7 +38,7 @@ pub fn create_array_it<I, const N: usize>(mut it: I) -> [I::Item; N]
 pub fn create_array<T, F, const N: usize>(f: F) -> [T; N]
     where F: FnMut(usize) -> T
 {
-    return create_array_it((0..N).map(f));
+    return create_array_it(&mut (0..N).map(f));
 }
 
 pub struct CartesianIterator<I, J>

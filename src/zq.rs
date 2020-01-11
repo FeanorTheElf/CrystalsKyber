@@ -104,7 +104,7 @@ impl Zq
 
     pub fn from_perfect(value: i16) -> Zq
     {
-        assert!(value >= 0 && (value as u32) < Q);
+        debug_assert!(value >= 0 && (value as u32) < Q);
         Zq {
             value: value as u32
         }

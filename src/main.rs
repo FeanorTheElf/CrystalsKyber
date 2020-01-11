@@ -3,7 +3,7 @@
 #![feature(const_generics)]
 
 extern crate test;
-extern crate rand;
+extern crate sha3;
 
 #[macro_use]
 mod util;
@@ -19,67 +19,31 @@ mod avx_r;
 
 use zq::*;
 use r::*;
-use m::CompressedM;
-use rand::prelude::*;
+use m::*;
+
+use sha3::digest::{ ExtendableOutput, Input, XofReader };
 
 type R = ref_r::R;
 type FourierReprR = ref_r::FourierReprR;
 type M = m::M<R>;
 type Mat = m::Mat<R>;
 
-fn sample_centered_binomial_distribution(random: u8) -> i8
-{
-    return (random << 4).count_ones() as i8 - (random >> 4).count_ones() as i8;
-}
-
-fn sample_r_centered_binomial_distribution<RNG>(rng: &mut RNG) -> R
-    where RNG: FnMut() -> u32
-{
-    let mut data: [Zq; 256] = [ZERO; 256];
-    for i in 0..64 {
-        let random: u32 = rng();
-        data[4*i] = Zq::from(sample_centered_binomial_distribution((random & 0xFF) as u8) as i16);
-        data[4*i + 1] = Zq::from(sample_centered_binomial_distribution(((random >> 8) & 0xFF) as u8) as i16);
-        data[4*i + 2] = Zq::from(sample_centered_binomial_distribution(((random >> 16) & 0xFF) as u8) as i16);
-        data[4*i + 3] = Zq::from(sample_centered_binomial_distribution(((random >> 24) & 0xFF) as u8) as i16);
-    }
-    return R::from(data);
-}
-
-fn sample_m_centered_binomial_distribution<RNG>(rng: &mut RNG) -> M
-    where RNG: FnMut() -> u32
-{
-    return M::from([
-        sample_r_centered_binomial_distribution(rng).dft(),
-        sample_r_centered_binomial_distribution(rng).dft(),
-        sample_r_centered_binomial_distribution(rng).dft()
-    ]);
-}
-
-fn uniform_r(rng: &mut ThreadRng) -> FourierReprR
-{
-    let mut result: [Zq; 256] = [ZERO; 256];
-    for i in 0..256 {
-        result[i] = Zq::from(rng.gen_range(0, 7681) as i16);
-    }
-    return R::from(result).dft();
-}
-
 const COMPRESSION_VECTOR: u16 = 11;
 const COMPRESSION_ELEMENT: u16 = 3;
 
-type PK = (CompressedM<COMPRESSION_VECTOR>, Mat);
+type PK = (CompressedM<COMPRESSION_VECTOR>, [u8; 32]);
 type SK = M;
 type Ciphertext = (CompressedM<COMPRESSION_VECTOR>, CompressedR<COMPRESSION_ELEMENT>);
 type Message = [u8; 32];
 
-fn enc<RNG>(pk: &PK, plaintext: Message, mut rng: RNG) -> Ciphertext
-    where RNG: FnMut() -> u32
+fn enc(pk: &PK, plaintext: Message, enc_seed: [u8; 32]) -> Ciphertext
 {
-    let r = sample_m_centered_binomial_distribution(&mut rng);
-    let e1 = sample_m_centered_binomial_distribution(&mut rng);
-    let e2 = sample_r_centered_binomial_distribution(&mut rng).dft();
-    let u = pk.1.transpose() * &r + &e1;
+    let mut noise = noise(&enc_seed);
+    let r = expand_error_distribution_vector(&mut noise);
+    let e1 = expand_error_distribution_vector(&mut noise);
+    let e2 = expand_error_distribution_element(&mut noise).dft();
+    let a = expand_matrix(&pk.1);
+    let u = a.transpose() * &r + &e1;
     let t = M::decompress(&pk.0);
     let message = R::decompress(&CompressedR::from_data(plaintext));
     let v = (&t * &r) + &e2 + &message.dft(); 
@@ -92,22 +56,75 @@ fn dec(sk: &SK, c: Ciphertext) -> Message
     return m.compress().get_data();
 }
 
-fn key_gen(rng: &mut ThreadRng) -> (SK, PK)
+fn key_gen(matrix_seed: [u8; 32], secret_seed: [u8; 32]) -> (SK, PK)
 {
-    let mut a_data: [[FourierReprR; 3]; 3] = [
-        [FourierReprR::zero(), FourierReprR::zero(), FourierReprR::zero()],
-        [FourierReprR::zero(), FourierReprR::zero(), FourierReprR::zero()],
-        [FourierReprR::zero(), FourierReprR::zero(), FourierReprR::zero()]];
-    for row in 0..3 {
-        for col in 0..3 {
-            a_data[row][col] = uniform_r(rng);
-        }
-    }
-    let a = Mat::from(a_data);
-    let s: M = sample_m_centered_binomial_distribution(&mut || rng.next_u32());
-    let e: M = sample_m_centered_binomial_distribution(&mut || rng.next_u32());
+    let a: Mat = expand_matrix(&matrix_seed);
+    let mut noise = noise(&secret_seed);
+    let s: M = expand_error_distribution_vector(&mut noise);
+    let e: M = expand_error_distribution_vector(&mut noise);
     let b: M = &a * &s + &e;
-    return (s, (b.compress(), a));
+    return (s, (b.compress(), matrix_seed));
+}
+
+fn uniform_zq<T: XofReader>(mut reader: T) -> impl Iterator<Item = Zq>
+{
+    let mut buffer: [u8; 2] = [0, 0];
+    std::iter::repeat(()).map(move |_| {
+        loop {
+            reader.read(&mut buffer);
+            let val: i16 = unsafe { std::mem::transmute::<_, i16>(buffer) } & 0x1FFF;
+            debug_assert!(val >= 0);
+            if val < Q as i16 {
+                return Zq::from_perfect(val);
+            }
+        }
+    })
+}
+
+fn centered_binomial_distribution(random: u8) -> Zq
+{
+    let mut value = (random << 4).count_ones() as i16 - (random >> 4).count_ones() as i16;
+    if value < 0 {
+        value += Q as i16;
+    }
+    return Zq::from_perfect(value);
+}
+
+fn expand_error_distribution_vector<T: XofReader>(reader: &mut T) -> M
+{
+    let mut buffer: [u8; N] = [0; N];
+    let data = util::create_array(|_| {
+        reader.read(&mut buffer);
+        R::from(util::create_array(|i| centered_binomial_distribution(buffer[i]))).dft()
+    });
+    return M::from(data);
+}
+
+fn expand_error_distribution_element<T: XofReader>(reader: &mut T) -> R
+{
+    let mut buffer: [u8; N] = [0; N];
+    reader.read(&mut buffer);
+    return R::from(util::create_array(|i| centered_binomial_distribution(buffer[i])));
+}
+
+fn noise(seed: &[u8; 32]) -> sha3::Sha3XofReader
+{
+    let mut hasher = sha3::Shake256::default();
+    hasher.input(&seed);
+    return hasher.xof_result();
+}
+
+fn expand_matrix(seed: &[u8; 32]) -> Mat
+{
+    let mut hasher = sha3::Shake128::default();
+    hasher.input(&seed);
+    let mut iter = uniform_zq(hasher.xof_result());
+    let data: [[FourierReprR; DIM]; DIM] = util::create_array(|_row| 
+        util::create_array(|_col| {
+            R::from(util::create_array_it(&mut iter)).dft()
+        })
+    );
+    return Mat::from(data);
 }
 
 fn main() 
@@ -117,16 +134,24 @@ fn main()
 
 #[bench]
 fn bench_all(bencher: &mut test::Bencher) {
-    let mut thread_rng = rand::thread_rng();
+    let mut i = 0;
     bencher.iter(|| {
-        let (sk, pk) = key_gen(&mut thread_rng);
+        let mut matrix_seed = [0; 32];
+        matrix_seed[0] = i;
+        let mut secret_seed = [0; 32];
+        secret_seed[1] = i;
+        let mut enc_seed = [0; 32];
+        enc_seed[2] = i;
+
+        let (sk, pk) = key_gen(matrix_seed, secret_seed);
         let mut expected_message: Message = [0; 32];
         expected_message[0] = 1;
         expected_message[10] = 1;
-        let ciphertext = enc(&pk, expected_message.clone(), || thread_rng.next_u32());
+        let ciphertext = enc(&pk, expected_message, enc_seed);
         let message = dec(&sk, ciphertext);
         for i in 0..32 {
             assert!(expected_message[i] == message[i], "Expected messages to be the same, differ at index {}: {} != {}", i, expected_message[i], message[i]);
         }
+        i += 1;
     });
 }

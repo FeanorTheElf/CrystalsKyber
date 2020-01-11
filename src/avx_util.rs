@@ -18,11 +18,6 @@ pub unsafe fn constant_zero() -> __m256i
     _mm256_setzero_si256()
 }
 
-pub unsafe fn rising_indices() -> __m256i
-{
-    _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7)
-}
-
 pub unsafe fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUNT: usize>(value: [__m256i; VEC_COUNT]) -> [__m256i; VEC_COUNT]
 {
     const VEC_SIZE: usize = 8;
@@ -42,7 +37,7 @@ pub unsafe fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUN
         COL_COUNT as i32 * 7);
     
     let matrix_begin: *const i32 = std::mem::transmute(value.as_ptr());
-    return util::create_array_it(util::cartesian(0..COL_COUNT, 0..vector_count_per_col).map(
+    return util::create_array_it(&mut util::cartesian(0..COL_COUNT, 0..vector_count_per_col).map(
             |(result_row, result_col): (usize, usize)|
         {
             let vector_begin: *const i32 = matrix_begin.offset((result_row + result_col * COL_COUNT * VEC_SIZE) as isize);

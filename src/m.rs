@@ -5,7 +5,7 @@ use super::util;
 use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, SubAssign };
 use std::convert::From;
 
-const DIM: usize = 3;
+pub const DIM: usize = 3;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct M<T: RingElement>
