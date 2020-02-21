@@ -127,7 +127,7 @@ fn expand_matrix(seed: &[u8; 32]) -> Mat
     return Mat::from(data);
 }
 
-fn main() 
+fn example()
 {
     let matrix_seed = [186, 203, 37, 232, 216, 184, 94, 78, 3, 131, 61, 210, 236, 36, 7, 14, 175, 128, 72, 102, 223, 101, 60, 28, 157, 205, 28, 55, 135, 93, 19, 33];
     let secret_seed = [194, 76, 38, 216, 214, 43, 172, 134, 181, 97, 182, 181, 162, 190, 28, 151, 161, 129, 176, 109, 111, 12, 83, 58, 79, 220, 223, 207, 190, 191, 4, 98];
@@ -144,6 +144,19 @@ fn main()
     println!("Ciphertext: {}", std::mem::size_of::<Ciphertext>());
     println!("Secret Key: {}", std::mem::size_of::<SK>());
     println!("Public Key: {}", std::mem::size_of::<PK>());
+}
+
+fn main() 
+{
+    let mut one_data = [ZERO; 256];
+    one_data[0] = ONE;
+    let product: FourierReprR = UNITY_ROOTS.iter().map(|r| R::from({
+        let mut coefficients = [ZERO; 256];
+        coefficients[0] = -(*r);
+        coefficients[1] = ONE;
+        coefficients
+    })).map(|r| r.dft()).fold(R::from(one_data).dft(), |current, next| current * &next);
+    println!("{:?}", product.inv_dft());
 }
 
 #[bench]

@@ -1,5 +1,4 @@
 use std::arch::x86_64::*;
-use std::mem::MaybeUninit;
 
 use super::util;
 
@@ -51,6 +50,7 @@ pub unsafe fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUN
     ));
 }
 
+#[cfg(test)]
 pub unsafe fn horizontal_sum(x: __m256i) -> i32
 {
     let low4: __m128i = _mm256_extractf128_si256(x, 0);
@@ -63,6 +63,7 @@ pub unsafe fn horizontal_sum(x: __m256i) -> i32
     return sum;
 }
 
+#[cfg(test)]
 pub unsafe fn shift_left(amount: usize, x: __m256i) -> __m256i
 {
     let i: [i32; 8] = util::shift_left(amount, [0, 1, 2, 3, 4, 5, 6, 7]);
@@ -73,29 +74,13 @@ pub unsafe fn shift_left(amount: usize, x: __m256i) -> __m256i
 #[inline(always)]
 pub unsafe fn compose<const IN: usize, const OUT: usize>(x: [i32; IN]) -> [__m256i; OUT]
 {
-    assert_eq!(IN, OUT * 8);
-    return util::create_array(|i| _mm256_setr_epi32(
-        x[i * 8 + 0], x[i * 8 + 1], x[i * 8 + 2], x[i * 8 + 3], 
-        x[i * 8 + 4], x[i * 8 + 5], x[i * 8 + 6], x[i * 8 + 7]));
+    std::mem::transmute_copy::<[i32; IN], [__m256i; OUT]>(&x)
 }
 
 #[inline(always)]
 pub unsafe fn decompose<const IN: usize, const OUT: usize>(x: [__m256i; IN]) -> [i32; OUT]
 {
-    assert_eq!(IN * 8, OUT);
-    let mut result: MaybeUninit<[i32; OUT]> = MaybeUninit::uninit();
-    for i in 0..IN {
-        let current_ptr = (*result.as_mut_ptr()).as_mut_ptr().offset((i * 8) as isize);
-        std::ptr::write(current_ptr.offset(0), _mm256_extract_epi32(x[i], 0));
-        std::ptr::write(current_ptr.offset(1), _mm256_extract_epi32(x[i], 1));
-        std::ptr::write(current_ptr.offset(2), _mm256_extract_epi32(x[i], 2));
-        std::ptr::write(current_ptr.offset(3), _mm256_extract_epi32(x[i], 3));
-        std::ptr::write(current_ptr.offset(4), _mm256_extract_epi32(x[i], 4));
-        std::ptr::write(current_ptr.offset(5), _mm256_extract_epi32(x[i], 5));
-        std::ptr::write(current_ptr.offset(6), _mm256_extract_epi32(x[i], 6));
-        std::ptr::write(current_ptr.offset(7), _mm256_extract_epi32(x[i], 7));
-    }
-    return result.assume_init();
+    std::mem::transmute_copy::<[__m256i; IN], [i32; OUT]>(&x)
 }
 
 #[inline(always)]

@@ -1,4 +1,4 @@
-use std::ops::{ Add, Mul, Div, Sub, AddAssign, MulAssign, DivAssign, SubAssign };
+use std::ops::{ Add, Mul, Div, Sub, Neg, AddAssign, MulAssign, DivAssign, SubAssign };
 use std::cmp::{ PartialEq, Eq };
 use std::fmt::{ Debug, Display, Formatter };
 use std::convert::From;
@@ -172,6 +172,19 @@ impl Div<Zq> for Zq
     {
         self /= rhs;
         return self;
+    }
+}
+
+impl Neg for Zq
+{
+    type Output = Zq;
+
+    #[inline(always)]
+    fn neg(self) -> Self::Output
+    {
+        Zq {
+            value: Q - self.value
+        }
     }
 }
 

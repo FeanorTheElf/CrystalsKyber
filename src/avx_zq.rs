@@ -80,6 +80,7 @@ impl Zq8
     impl_get!(get_0: 0, get_1: 1, get_2: 2, get_3: 3, get_4: 4, get_5: 5, get_6: 6, get_7: 7);
     impl_set!(set_0: 0, set_1: 1, set_2: 2, set_3: 3, set_4: 4, set_5: 5, set_6: 6, set_7: 7);
 
+    #[cfg(test)]
     pub fn sum_horizontal(&self) -> Zq
     {
         unsafe {
@@ -97,6 +98,7 @@ impl Zq8
         }
     }
 
+    #[cfg(test)]
     pub fn shift_left(self, amount: usize) -> Zq8
     {
         Zq8 {
