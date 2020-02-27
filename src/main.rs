@@ -148,15 +148,23 @@ fn example()
 
 fn main() 
 {
-    let mut one_data = [ZERO; 256];
-    one_data[0] = ONE;
-    let product: FourierReprR = UNITY_ROOTS.iter().map(|r| R::from({
-        let mut coefficients = [ZERO; 256];
-        coefficients[0] = -(*r);
-        coefficients[1] = ONE;
-        coefficients
-    })).map(|r| r.dft()).fold(R::from(one_data).dft(), |current, next| current * &next);
-    println!("{:?}", product.inv_dft());
+    let mut matrix_seed = [0; 32];
+    matrix_seed[0] = 123;
+    let mut secret_seed = [0; 32];
+    secret_seed[1] = 41;
+    let mut enc_seed = [0; 32];
+    enc_seed[2] = 64;
+
+    let (sk, pk) = key_gen(matrix_seed, secret_seed);
+    let mut expected_message: Message = [0; 32];
+    expected_message[0] = 1;
+    expected_message[2] = 0xF0;
+    expected_message[12] = 0x1A;
+    let ciphertext = enc(&pk, expected_message, enc_seed);
+    let message = dec(&sk, ciphertext);
+    for i in 0..32 {
+        assert!(expected_message[i] == message[i], "Expected messages to be the same, differ at index {}: {} != {}", i, expected_message[i], message[i]);
+    }
 }
 
 #[bench]
@@ -177,8 +185,8 @@ fn bench_all(bencher: &mut test::Bencher) {
         expected_message[12] = 0x1A;
         let ciphertext = enc(&pk, expected_message, enc_seed);
         let message = dec(&sk, ciphertext);
-        for i in 0..32 {
-            assert!(expected_message[i] == message[i], "Expected messages to be the same, differ at index {}: {} != {}", i, expected_message[i], message[i]);
+        for j in 0..32 {
+            assert!(expected_message[j] == message[j], "Expected messages to be the same, differ at index {}: {} != {}", i, expected_message[j], message[j]);
         }
         i += 1;
     });

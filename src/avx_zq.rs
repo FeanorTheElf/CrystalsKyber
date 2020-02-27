@@ -160,8 +160,7 @@ impl From<[i16; 8]> for Zq8
     #[inline(always)]
     fn from(value: [i16; 8]) -> Zq8
     {
-        let f = |i: usize| value[i] as i32;
-        let data = create_array!(f(0, 1, 2, 3, 4, 5, 6, 7));
+        let data = create_array(|i| value[i] as i32);
         return Zq8 {
             data: unsafe { mod_q(avx_util::compose::<8, 1>(data)[0]) }
         };

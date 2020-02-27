@@ -268,9 +268,9 @@ impl FourierReprR
         let n_vec = n / VEC_SIZE;
         let old_n_vec = old_n / VEC_SIZE;
 
-        for j in 0..d {
-            for vec_k in 0..old_n_vec {
-                let unity_root = Zq8::from(util::create_array(|dk| unity_root((vec_k * VEC_SIZE + dk) * d)));
+        for vec_k in 0..old_n_vec {
+            let unity_root = Zq8::from(util::create_array(|dk| unity_root((vec_k * VEC_SIZE + dk) * d)));
+            for j in 0..d {
                 dst[j * n_vec + vec_k] = src[j * old_n_vec + vec_k] + src[(j + d) * old_n_vec + vec_k] * unity_root;
                 dst[j * n_vec + vec_k + old_n_vec] = src[j * old_n_vec + vec_k] - src[(j + d) * old_n_vec + vec_k] * unity_root;
             }
@@ -287,12 +287,12 @@ impl FourierReprR
         Self::fft_iter_nxd(&mut values, &temp, 2, &unity_root);
         Self::fft_iter_nxd(&mut temp, &values, 3, &unity_root);
         Self::fft_iter_nxd(&mut values, &temp, 4, &unity_root);
-        Self::fft_iter_nxd(&mut temp, &values, 5, &unity_root);
 
         // temp corresponds to nxd = 32x8 array
-        temp = transpose_vectorized_matrix::<8, 32>(temp);
+        values = transpose_vectorized_matrix::<16, 32>(values);
         // temp corresponds to dxn = 8x32 array
 
+        Self::fft_iter_dxn(&mut temp, &values, 5, &unity_root);
         Self::fft_iter_dxn(&mut values, &temp, 6, &unity_root);
         Self::fft_iter_dxn(&mut temp, &values, 7, &unity_root);
         Self::fft_iter_dxn(&mut values, &temp, 8, &unity_root);

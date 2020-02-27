@@ -1,13 +1,5 @@
 use std::mem::MaybeUninit;
 
-macro_rules! create_array {
-    ($f:ident($($index:literal),*)) => {
-        [$(
-            ($f)($index)
-        ),*]
-    };
-}
-
 pub const fn shift_left(amount: usize, values: [i32; 8]) -> [i32; 8]
 {
     [
