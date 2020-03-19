@@ -39,6 +39,7 @@ pub trait RingFourierRepr: Eq + Clone +
     fn add_product(&mut self, a: &Self, b: &Self);
 }
 
+#[derive(Clone)]
 pub struct CompressedR<const D : u16>
 {
     pub data: [CompressedZq<D>; N]

@@ -281,6 +281,7 @@ impl FourierReprR
     fn fft<F>(mut values: [Zq8; VEC_COUNT], unity_root: F) -> [Zq8; VEC_COUNT]
         where F: Fn(usize) -> Zq
     {
+        // see ref_r::FourierReprR::fft for details on what happens
         let mut temp: [Zq8; VEC_COUNT] = [Zq8::zero(); VEC_COUNT];
 
         Self::fft_iter_nxd(&mut temp, &values, 1, &unity_root);

@@ -38,11 +38,11 @@ type Message = [u8; 32];
 
 fn enc(pk: &PK, plaintext: Message, enc_seed: [u8; 32]) -> Ciphertext
 {
-    let mut noise = noise(&enc_seed);
-    let r = expand_error_distribution_vector(&mut noise);
-    let e1 = expand_error_distribution_vector(&mut noise);
-    let e2 = expand_error_distribution_element(&mut noise).dft();
-    let a = expand_matrix(&pk.1);
+    let mut noise = expand_randomness_shake_256(&enc_seed);
+    let r = sample_error_distribution_vector(&mut noise);
+    let e1 = sample_error_distribution_vector(&mut noise);
+    let e2 = sample_error_distribution_element(&mut noise).dft();
+    let a = sample_uniform_matrix(expand_randomness_shake_128(&pk.1));
     let u = a.transpose() * &r + &e1;
     let t = M::decompress(&pk.0);
     let message = R::decompress(&CompressedR::from_data(plaintext));
@@ -58,15 +58,15 @@ fn dec(sk: &SK, c: Ciphertext) -> Message
 
 fn key_gen(matrix_seed: [u8; 32], secret_seed: [u8; 32]) -> (SK, PK)
 {
-    let a: Mat = expand_matrix(&matrix_seed);
-    let mut noise = noise(&secret_seed);
-    let s: M = expand_error_distribution_vector(&mut noise);
-    let e: M = expand_error_distribution_vector(&mut noise);
+    let a: Mat = sample_uniform_matrix(expand_randomness_shake_128(&matrix_seed));
+    let mut noise = expand_randomness_shake_256(&secret_seed);
+    let s: M = sample_error_distribution_vector(&mut noise);
+    let e: M = sample_error_distribution_vector(&mut noise);
     let b: M = &a * &s + &e;
     return (s, (b.compress(), matrix_seed));
 }
 
-fn uniform_zq<T: XofReader>(mut reader: T) -> impl Iterator<Item = Zq>
+fn sample_uniform_zq<T: XofReader>(mut reader: T) -> impl Iterator<Item = Zq>
 {
     let mut buffer: [u8; 2] = [0, 0];
     std::iter::repeat(()).map(move |_| {
@@ -81,7 +81,7 @@ fn uniform_zq<T: XofReader>(mut reader: T) -> impl Iterator<Item = Zq>
     })
 }
 
-fn centered_binomial_distribution(random: u8) -> Zq
+fn sample_centered_binomial_distribution(random: u8) -> Zq
 {
     let mut value = (random << 4).count_ones() as i16 - (random >> 4).count_ones() as i16;
     if value < 0 {
@@ -90,35 +90,40 @@ fn centered_binomial_distribution(random: u8) -> Zq
     return Zq::from_perfect(value);
 }
 
-fn expand_error_distribution_vector<T: XofReader>(reader: &mut T) -> M
+fn sample_error_distribution_vector<T: XofReader>(reader: &mut T) -> M
 {
     let mut buffer: [u8; N] = [0; N];
     let data = util::create_array(|_| {
         reader.read(&mut buffer);
-        R::from(util::create_array(|i| centered_binomial_distribution(buffer[i]))).dft()
+        R::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i]))).dft()
     });
     return M::from(data);
 }
 
-fn expand_error_distribution_element<T: XofReader>(reader: &mut T) -> R
+fn sample_error_distribution_element<T: XofReader>(reader: &mut T) -> R
 {
     let mut buffer: [u8; N] = [0; N];
     reader.read(&mut buffer);
-    return R::from(util::create_array(|i| centered_binomial_distribution(buffer[i])));
+    return R::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i])));
 }
 
-fn noise(seed: &[u8; 32]) -> sha3::Sha3XofReader
+fn expand_randomness_shake_256(seed: &[u8; 32]) -> sha3::Sha3XofReader
 {
     let mut hasher = sha3::Shake256::default();
     hasher.input(&seed);
     return hasher.xof_result();
 }
 
-fn expand_matrix(seed: &[u8; 32]) -> Mat
+fn expand_randomness_shake_128(seed: &[u8; 32]) -> sha3::Sha3XofReader
 {
     let mut hasher = sha3::Shake128::default();
     hasher.input(&seed);
-    let mut iter = uniform_zq(hasher.xof_result());
+    return hasher.xof_result();
+}
+
+fn sample_uniform_matrix<T: XofReader>(reader: T) -> Mat
+{
+    let mut iter = sample_uniform_zq(reader);
     let data: [[FourierReprR; DIM]; DIM] = util::create_array(|_row| 
         util::create_array(|_col| {
             R::from(util::create_array_it(&mut iter)).dft()
@@ -169,14 +174,13 @@ fn main()
 
 #[bench]
 fn bench_all(bencher: &mut test::Bencher) {
-    let mut i = 0;
     bencher.iter(|| {
         let mut matrix_seed = [0; 32];
-        matrix_seed[0] = i;
+        matrix_seed[0] = 1;
         let mut secret_seed = [0; 32];
-        secret_seed[1] = i;
+        secret_seed[1] = 2;
         let mut enc_seed = [0; 32];
-        enc_seed[2] = i;
+        enc_seed[2] = 3;
 
         let (sk, pk) = key_gen(matrix_seed, secret_seed);
         let mut expected_message: Message = [0; 32];
@@ -186,8 +190,58 @@ fn bench_all(bencher: &mut test::Bencher) {
         let ciphertext = enc(&pk, expected_message, enc_seed);
         let message = dec(&sk, ciphertext);
         for j in 0..32 {
-            assert!(expected_message[j] == message[j], "Expected messages to be the same, differ at index {}: {} != {}", i, expected_message[j], message[j]);
+            assert!(expected_message[j] == message[j], "Expected messages to be the same, differ at index {}: {} != {}", j, expected_message[j], message[j]);
         }
-        i += 1;
+    });
+}
+
+#[bench]
+fn bench_key_gen(bencher: &mut test::Bencher) {
+    bencher.iter(|| {
+        let mut matrix_seed = [0; 32];
+        matrix_seed[0] = 1;
+        let mut secret_seed = [0; 32];
+        secret_seed[1] = 2;
+
+        let (_sk, _pk) = key_gen(matrix_seed, secret_seed);
+    });
+}
+
+#[bench]
+fn bench_enc(bencher: &mut test::Bencher) {
+    let mut matrix_seed = [0; 32];
+    matrix_seed[0] = 1;
+    let mut secret_seed = [0; 32];
+    secret_seed[1] = 2;
+    let mut enc_seed = [0; 32];
+    enc_seed[2] = 3;
+
+    let (_sk, pk) = key_gen(matrix_seed, secret_seed);
+    let mut expected_message: Message = [0; 32];
+    expected_message[0] = 1;
+    expected_message[2] = 0xF0;
+    expected_message[12] = 0x1A;
+    bencher.iter(|| {
+        let _ciphertext = enc(&pk, expected_message, enc_seed);
+    });
+}
+
+#[bench]
+fn bench_dec(bencher: &mut test::Bencher) {
+    let mut matrix_seed = [0; 32];
+    matrix_seed[0] = 1;
+    let mut secret_seed = [0; 32];
+    secret_seed[1] = 2;
+    let mut enc_seed = [0; 32];
+    enc_seed[2] = 3;
+
+    let (sk, pk) = key_gen(matrix_seed, secret_seed);
+    let mut expected_message: Message = [0; 32];
+    expected_message[0] = 1;
+    expected_message[2] = 0xF0;
+    expected_message[12] = 0x1A;
+    let ciphertext = enc(&pk, expected_message, enc_seed);
+    bencher.iter(|| {
+        let _m = dec(&sk, ciphertext.clone());
     });
 }
