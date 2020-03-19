@@ -3,6 +3,7 @@ use std::ops::{ Add, Mul, Sub, Neg, AddAssign, MulAssign, SubAssign, DivAssign }
 use std::cmp::{ PartialEq, Eq };
 use std::fmt::{ Debug };
 
+use super::zq;
 use super::zq::{ Zq, ONE };
 use super::util::create_array;
 use super::avx_util;
@@ -11,7 +12,7 @@ use super::avx_util::{ constant_f32, constant_i32, constant_zero, constant_u32 }
 #[cfg(test)]
 use super::zq::ZERO;
 
-pub const Q: i32 = 7681;
+pub const Q: i32 = zq::Q as i32;
 
 #[derive(Clone, Copy)]
 pub struct Zq8
@@ -22,7 +23,7 @@ pub struct Zq8
 
 const NEG_Q: i32 = -Q;
 const Q_DEC: i32 = Q - 1;
-const Q_INV: f32 = 1. / 7681.;
+const Q_INV: f32 = 1. / (Q as f32);
 
 macro_rules! impl_get {
     ($($ident:ident: $index:literal),*) => {
@@ -79,32 +80,6 @@ impl Zq8
 
     impl_get!(get_0: 0, get_1: 1, get_2: 2, get_3: 3, get_4: 4, get_5: 5, get_6: 6, get_7: 7);
     impl_set!(set_0: 0, set_1: 1, set_2: 2, set_3: 3, set_4: 4, set_5: 5, set_6: 6, set_7: 7);
-
-    #[cfg(test)]
-    pub fn sum_horizontal(&self) -> Zq
-    {
-        unsafe {
-            let mut sum: i32 = avx_util::horizontal_sum(self.data);
-            if sum >= 4 * Q {
-                sum -= 4 * Q;
-            }
-            if sum >= 2 * Q {
-                sum -= 2 * Q;
-            }
-            if sum >= Q {
-                sum -= Q;
-            }
-            return Zq::from_perfect(sum as i16);
-        }
-    }
-
-    #[cfg(test)]
-    pub fn shift_left(self, amount: usize) -> Zq8
-    {
-        Zq8 {
-            data: unsafe { avx_util::shift_left(amount, self.data) }
-        }
-    }
 
     pub fn broadcast(x: Zq) -> Zq8
     {
@@ -403,48 +378,18 @@ fn test_mul() {
 }
 
 #[test]
-fn test_shift_left() {
-    let v: Zq8 = Zq8::from([0, 1, 2, 3, 4, 5, 6, 7]);
-    assert_eq!(Zq8::from([1, 2, 3, 4, 5, 6, 7, 0]), v.shift_left(1));
-}
-
-#[test]
 fn test_modulo_q() {
-    for x in 0..7680*7680 {
+    for x in 0..(Q - 1)*(Q - 1) {
         let p: i32 = x as i32;
         let f: f32 = p as f32;
         let q: f32 = f * Q_INV;
         let r: i32 = q.floor() as i32;
-        let mut m: i32 = p - r * 7681;
+        let mut m: i32 = p - r * Q;
         if m < 0 {
-            m += 7681;
-        } else if m >= 7681 {
-            m -= 7681;
+            m += Q;
+        } else if m >= Q {
+            m -= Q;
         }
-        assert!((x as i32) % 7681 == m, "Expected {}, got {} at for {}", (x as i32) % 7681, m, x);
+        assert!((x as i32) % Q == m, "Expected {}, got {} at for {}", (x as i32) % Q, m, x);
     }
-}
-
-#[bench]
-fn bench_add_mul(bencher: &mut test::Bencher)
-{
-    let data: [i16; 32] = core::hint::black_box([1145, 6716, 88, 5957, 3742, 3441, 2663, 1301, 159, 4074, 2945, 6671, 1392, 3999, 
-        2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704]);
-    let elements: [Zq8; 4] = [Zq8::from(&data[0..8]), Zq8::from(&data[8..16]), Zq8::from(&data[16..24]), Zq8::from(&data[24..32])];
-    bencher.iter(|| {
-        let mut result = Zq8::zero();
-        for i in 0..4 {
-            for j in 0..4 {
-                result += elements[i] * elements[j];
-                result += elements[i] * elements[j].shift_left(1);
-                result += elements[i] * elements[j].shift_left(2);
-                result += elements[i] * elements[j].shift_left(3);
-                result += elements[i] * elements[j].shift_left(4);
-                result += elements[i] * elements[j].shift_left(5);
-                result += elements[i] * elements[j].shift_left(6);
-                result += elements[i] * elements[j].shift_left(7);
-            }
-        }
-        assert_eq!(Zq::from(4050), result.sum_horizontal());
-    });
 }

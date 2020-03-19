@@ -50,27 +50,6 @@ pub unsafe fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUN
     ));
 }
 
-#[cfg(test)]
-pub unsafe fn horizontal_sum(x: __m256i) -> i32
-{
-    let low4: __m128i = _mm256_extractf128_si256(x, 0);
-    let high4: __m128i = _mm256_extractf128_si256(x, 1);
-    let sum4: __m128i = _mm_add_epi32(low4, high4);
-    let low2: i64 = _mm_extract_epi64(sum4, 0);
-    let high2: i64 = _mm_extract_epi64(sum4, 1);
-    let sum2: i64 = low2 + high2;
-    let sum: i32 = ((sum2 >> 32) + (sum2 & 0xFFFFFFFF)) as i32;
-    return sum;
-}
-
-#[cfg(test)]
-pub unsafe fn shift_left(amount: usize, x: __m256i) -> __m256i
-{
-    let i: [i32; 8] = util::shift_left(amount, [0, 1, 2, 3, 4, 5, 6, 7]);
-    let index: __m256i = _mm256_setr_epi32(i[0], i[1], i[2], i[3], i[4], i[5], i[6], i[7]);
-    return _mm256_permutevar8x32_epi32(x, index);
-}
-
 #[inline(always)]
 pub unsafe fn compose<const IN: usize, const OUT: usize>(x: [i32; IN]) -> [__m256i; OUT]
 {
