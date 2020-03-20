@@ -10,9 +10,6 @@ use super::util;
 use super::avx_util;
 use super::avx_util::{ constant_f32, constant_i32, constant_zero, constant_u32 };
 
-#[cfg(test)]
-use super::zq::ZERO;
-
 pub const Q: i32 = zq::Q as i32;
 
 /// Vectors of 8 elements of the field Zq = Z/qZ for q = Q = 7681. Addition
