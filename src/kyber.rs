@@ -8,7 +8,7 @@ use super::module::*;
 use sha3::digest::{ ExtendableOutput, Input, XofReader };
 
 type Rq = avx_r::Rq;
-type FourierReprRq = avx_r::FourierReprRq;
+type NTTDomainRq = avx_r::NTTDomainRq;
 type Module = module::Module<Rq>;
 type Matrix = module::Matrix<Rq>;
 
@@ -26,18 +26,18 @@ pub fn encrypt(pk: &PublicKey, plaintext: Plaintext, enc_seed: Seed) -> Cipherte
     let mut noise_random = expand_randomness_shake_256(enc_seed);
     let r = sample_error_distribution_vector(&mut noise_random);
     let e1 = sample_error_distribution_vector(&mut noise_random);
-    let e2 = sample_error_distribution_element(&mut noise_random).dft();
+    let e2 = sample_error_distribution_element(&mut noise_random).ntt();
     let A = sample_uniform_matrix(expand_randomness_shake_128(pk.1));
     let u = A.transpose() * &r + &e1;
     let t = Module::decompress(&pk.0);
     let message = Rq::decompress(&CompressedRq::from_data(plaintext));
-    let v = (&t * &r) + &e2 + &message.dft(); 
-    return (u.compress(), v.inv_dft().compress());
+    let v = (&t * &r) + &e2 + &message.ntt(); 
+    return (u.compress(), v.inv_ntt().compress());
 }
 
 pub fn decrypt(sk: &SecretKey, c: Ciphertext) -> Plaintext
 {
-    let m = Rq::decompress(&c.1) - &(sk * &Module::decompress(&c.0)).inv_dft();
+    let m = Rq::decompress(&c.1) - &(sk * &Module::decompress(&c.0)).inv_ntt();
     return m.compress().get_data();
 }
 
@@ -69,9 +69,9 @@ fn sample_uniform_zq<T: XofReader>(mut reader: T) -> impl Iterator<Item = Zq>
 fn sample_uniform_matrix<T: XofReader>(reader: T) -> Matrix
 {
     let mut iter = sample_uniform_zq(reader);
-    let data: [[FourierReprRq; DIM]; DIM] = util::create_array(|_row| 
+    let data: [[NTTDomainRq; DIM]; DIM] = util::create_array(|_row| 
         util::create_array(|_col| {
-            Rq::from(util::create_array_it(&mut iter)).dft()
+            Rq::from(util::create_array_it(&mut iter)).ntt()
         })
     );
     return Matrix::from(data);
@@ -91,7 +91,7 @@ fn sample_error_distribution_vector<T: XofReader>(reader: &mut T) -> Module
     let mut buffer: [u8; N] = [0; N];
     let data = util::create_array(|_| {
         reader.read(&mut buffer);
-        Rq::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i]))).dft()
+        Rq::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i]))).ntt()
     });
     return Module::from(data);
 }

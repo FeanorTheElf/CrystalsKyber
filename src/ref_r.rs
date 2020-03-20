@@ -158,7 +158,7 @@ impl Debug for Rq
 
 impl Ring for Rq
 {
-    type FourierRepr = FourierReprRq;
+    type NTTDomain = NTTDomainRq;
 
     fn zero() -> Rq
     {
@@ -167,9 +167,9 @@ impl Ring for Rq
         }
     }
 
-    fn dft(self) -> FourierReprRq 
+    fn ntt(self) -> NTTDomainRq 
     {
-        FourierReprRq::dft(self)
+        NTTDomainRq::dft(self)
     }
     
     fn compress<const D: u16>(&self) -> CompressedRq<D>
@@ -195,16 +195,16 @@ impl Ring for Rq
     }
 }
 
-/// Fourier representation of an element of Rq, i.e.
+/// Chinese remainder representation of an element of Rq, i.e.
 /// the values of the polynomial at each root of unity
 /// in Zq
 #[derive(Clone)]
-pub struct FourierReprRq
+pub struct NTTDomainRq
 {
     values: [Zq; N]
 }
 
-impl FourierReprRq
+impl NTTDomainRq
 {
     #[inline(never)]
     fn fft<F>(mut values: [Zq; N], unity_root: F) -> [Zq; N]
@@ -272,20 +272,30 @@ impl FourierReprRq
         return values;
     }
 
-    // Calculates the fourier representation of an element in R
-    fn dft(r: Rq) -> FourierReprRq
+    // Calculates the chinese remainder representation of an element in R
+    fn dft(mut r: Rq) -> NTTDomainRq
     {
-        FourierReprRq {
-            values: Self::fft(r.data, |i| UNITY_ROOTS[i])
+        // we do not need the exact fourier transformation (i.e. the evaluation at
+        // all 256-th roots of unity), but the evaluation at all primitive 512-th
+        // roots of unity. Since the primitive 512-th roots of unity are exactly
+        // the 256-th roots of unity multiplied with any primitive root of unity,
+        // this approach lets us calculate the correct result
+        for i in 0..N {
+            r.data[i] *= UNITY_ROOTS_512[i]
+        }
+        NTTDomainRq {
+            values: Self::fft(r.data, |i| UNITY_ROOTS_512[2 * i])
         }
     }
 
-    // Calculates the element in R with the given fourier representation
-    fn inv_dft(fourier_repr: FourierReprRq) -> Rq
+    // Calculates the element in R with the given chinese remainder representation
+    fn inv_dft(ntt_repr: NTTDomainRq) -> Rq
     {
         let inv_n: Zq = ONE / Zq::from(N as i16);
-        let mut result = Self::fft(fourier_repr.values, |i| UNITY_ROOTS[(N - i) & 0xFF]);
+        let mut result = Self::fft(ntt_repr.values, |i| UNITY_ROOTS_512[2 * ((N - i) % 256)]);
         for i in 0..N {
+            // see dft for why this is necessary (we do not do a real fourier transformation)
+            result[i] *= REV_UNITY_ROOTS_512[i];
             result[i] *= inv_n;
         }
         return Rq {
@@ -294,67 +304,67 @@ impl FourierReprRq
     }
 }
 
-impl PartialEq for FourierReprRq
+impl PartialEq for NTTDomainRq
 {
-    fn eq(&self, rhs: &FourierReprRq) -> bool
+    fn eq(&self, rhs: &NTTDomainRq) -> bool
     {
         (0..N).all(|i| self.values[i] == rhs.values[i])
     }
 }
 
-impl Eq for FourierReprRq {}
+impl Eq for NTTDomainRq {}
 
-impl<'a> Add<&'a FourierReprRq> for FourierReprRq
+impl<'a> Add<&'a NTTDomainRq> for NTTDomainRq
 {
-    type Output = FourierReprRq;
+    type Output = NTTDomainRq;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a FourierReprRq) -> Self::Output
+    fn add(mut self, rhs: &'a NTTDomainRq) -> Self::Output
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a> Add<FourierReprRq> for &'a FourierReprRq
+impl<'a> Add<NTTDomainRq> for &'a NTTDomainRq
 {
-    type Output = FourierReprRq;
+    type Output = NTTDomainRq;
 
     #[inline(always)]
-    fn add(self, mut rhs: FourierReprRq) -> Self::Output
+    fn add(self, mut rhs: NTTDomainRq) -> Self::Output
     {
         rhs += self;
         return rhs;
     }
 }
 
-impl<'a> Mul<&'a FourierReprRq> for FourierReprRq
+impl<'a> Mul<&'a NTTDomainRq> for NTTDomainRq
 {
-    type Output = FourierReprRq;
+    type Output = NTTDomainRq;
 
     #[inline(always)]
-    fn mul(mut self, rhs: &'a FourierReprRq) -> Self::Output
+    fn mul(mut self, rhs: &'a NTTDomainRq) -> Self::Output
     {
         self *= rhs;
         return self;
     }
 }
 
-impl<'a> Mul<FourierReprRq> for &'a FourierReprRq
+impl<'a> Mul<NTTDomainRq> for &'a NTTDomainRq
 {
-    type Output = FourierReprRq;
+    type Output = NTTDomainRq;
 
     #[inline(always)]
-    fn mul(self, mut rhs: FourierReprRq) -> Self::Output
+    fn mul(self, mut rhs: NTTDomainRq) -> Self::Output
     {
         rhs *= self;
         return rhs;
     }
 }
 
-impl Mul<Zq> for FourierReprRq
+impl Mul<Zq> for NTTDomainRq
 {
-    type Output = FourierReprRq;
+    type Output = NTTDomainRq;
 
     #[inline(always)]
     fn mul(mut self, rhs: Zq) -> Self::Output
@@ -364,24 +374,24 @@ impl Mul<Zq> for FourierReprRq
     }
 }
 
-impl<'a> Sub<&'a FourierReprRq> for FourierReprRq
+impl<'a> Sub<&'a NTTDomainRq> for NTTDomainRq
 {
-    type Output = FourierReprRq;
+    type Output = NTTDomainRq;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a FourierReprRq) -> Self::Output
+    fn sub(mut self, rhs: &'a NTTDomainRq) -> Self::Output
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a> Sub<FourierReprRq> for &'a FourierReprRq
+impl<'a> Sub<NTTDomainRq> for &'a NTTDomainRq
 {
-    type Output = FourierReprRq;
+    type Output = NTTDomainRq;
 
     #[inline(always)]
-    fn sub(self, mut rhs: FourierReprRq) -> Self::Output
+    fn sub(self, mut rhs: NTTDomainRq) -> Self::Output
     {
         rhs -= self;
         rhs *= ZERO - ONE;
@@ -389,37 +399,37 @@ impl<'a> Sub<FourierReprRq> for &'a FourierReprRq
     }
 }
 
-impl<'a> AddAssign<&'a FourierReprRq> for FourierReprRq
+impl<'a> AddAssign<&'a NTTDomainRq> for NTTDomainRq
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a FourierReprRq) {
+    fn add_assign(&mut self, rhs: &'a NTTDomainRq) {
         for i in 0..N {
             self.values[i] += rhs.values[i];
         }
     }
 }
 
-impl<'a> SubAssign<&'a FourierReprRq> for FourierReprRq
+impl<'a> SubAssign<&'a NTTDomainRq> for NTTDomainRq
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a FourierReprRq) {
+    fn sub_assign(&mut self, rhs: &'a NTTDomainRq) {
         for i in 0..N {
             self.values[i] -= rhs.values[i];
         }
     }
 }
 
-impl<'a> MulAssign<&'a FourierReprRq> for FourierReprRq
+impl<'a> MulAssign<&'a NTTDomainRq> for NTTDomainRq
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: &'a FourierReprRq) {
+    fn mul_assign(&mut self, rhs: &'a NTTDomainRq) {
         for i in 0..N {
             self.values[i] *= rhs.values[i];
         }
     }
 }
 
-impl MulAssign<Zq> for FourierReprRq
+impl MulAssign<Zq> for NTTDomainRq
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: Zq) {
@@ -429,21 +439,21 @@ impl MulAssign<Zq> for FourierReprRq
     }
 }
 
-impl<'a> From<&'a [i16]> for FourierReprRq
+impl<'a> From<&'a [i16]> for NTTDomainRq
 {
-    fn from(value: &'a [i16]) -> FourierReprRq {
+    fn from(value: &'a [i16]) -> NTTDomainRq {
         assert_eq!(N, value.len());
         let mut values: [Zq; N] = [ZERO; N];
         for i in 0..N {
             values[i] = Zq::from(value[i]);
         }
-        return FourierReprRq {
+        return NTTDomainRq {
             values: values
         };
     }
 }
 
-impl Debug for FourierReprRq
+impl Debug for NTTDomainRq
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
@@ -454,7 +464,7 @@ impl Debug for FourierReprRq
     }
 }
 
-impl base64::Encodable for FourierReprRq
+impl base64::Encodable for NTTDomainRq
 {
     fn encode(&self, encoder: &mut base64::Encoder)
     {
@@ -465,26 +475,26 @@ impl base64::Encodable for FourierReprRq
 
     fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
     {
-        Ok(FourierReprRq {
+        Ok(NTTDomainRq {
             values: util::try_create_array(|_i| Ok(Zq::from_perfect(data.read_bits(16)? as i16)))?
         })
     }
 }
 
-impl RingFourierRepr for FourierReprRq
+impl RingNTTDomain for NTTDomainRq
 {
     type StdRepr = Rq;
 
-    fn zero() -> FourierReprRq
+    fn zero() -> NTTDomainRq
     {
-        return FourierReprRq {
+        return NTTDomainRq {
             values: [ZERO; N]
         }
     }
 
-    fn inv_dft(self) -> Rq 
+    fn inv_ntt(self) -> Rq 
     {
-        FourierReprRq::inv_dft(self)
+        NTTDomainRq::inv_dft(self)
     }
 
     fn mul_scalar(&mut self, x: Zq)
@@ -492,7 +502,7 @@ impl RingFourierRepr for FourierReprRq
         *self *= x;
     }
 
-    fn add_product(&mut self, a: &FourierReprRq, b: &FourierReprRq)
+    fn add_product(&mut self, a: &NTTDomainRq, b: &NTTDomainRq)
     {
         for i in 0..N {
             self.values[i] += a.values[i] * b.values[i];
@@ -501,20 +511,7 @@ impl RingFourierRepr for FourierReprRq
 }
 
 #[cfg(test)]
-const ELEMENT: [i16; N] = [1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 81, 0, 1, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 55, 0, 0, 0, 0, 0, 0, 0, 0, 71, 0, 0, 0, 0, 0, 0, 0, 16, 0, 76, 
-    13, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 84, 0, 0, 99, 0, 60, 0, 0, 0, 7680, 
-    0, 0, 0, 0, 0, 26, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 0, 0, 256, 0, 0, 0, 0, 0, 0, 
-    0, 0, 71, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 51, 0, 0, 3840, 0, 0, 
-    2, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 
-    0, 0, 0, 67, 0, 0, 7680, 0, 0, 0, 0, 48, 0, 63, 0, 0, 21, 0, 0, 0, 0, 0, 0, 1, 
-    52, 0, 0, 0, 47, 0, 0, 0, 0, 95, 0, 0, 0, 6, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    73, 15, 0, 0, 22, 0, 0, 0, 0, 0, 0, 1, 64, 2, 0, 87, 0, 0, 1, 0, 0, 0, 1, 0, 0, 
-    0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
-
-#[cfg(test)]
-const DFT_ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663, 
+const ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663, 
     1301, 159, 4074, 2945, 6671, 1392, 3999, 2394, 7624, 2420, 4199, 2762, 4206, 4471, 1582, 
     3870, 5363, 4246, 1800, 4568, 2081, 5642, 1115, 1242, 704, 2348, 6823, 6135, 854, 3320, 
     2929, 6417, 7368, 535, 1491, 7271, 7666, 1256, 6093, 4767, 3442, 6055, 2757, 3953, 7391, 
@@ -534,49 +531,40 @@ const DFT_ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 266
     6881, 1026, 4981, 3325, 4511];
 
 #[bench]
-fn bench_fft(bencher: &mut test::Bencher) {
+fn bench_ntt(bencher: &mut test::Bencher) {
     let element = Rq::from(&ELEMENT[..]);
-    let expected_fourier_reprn = FourierReprRq::from(&DFT_ELEMENT[..]);
     bencher.iter(|| {
-        let fourier_repr = FourierReprRq::dft(element.clone());
-        assert_eq!(expected_fourier_reprn, fourier_repr);
+        let ntt_repr = NTTDomainRq::dft(element.clone());
+        assert_eq!(element, ntt_repr.inv_ntt());
     });
-}
-
-#[test]
-fn test_inv_fft() {
-    let fourier_repr = FourierReprRq::from(&DFT_ELEMENT[..]);
-    let expected_element = Rq::from(&ELEMENT[..]);
-    let element = FourierReprRq::inv_dft(fourier_repr);
-    assert_eq!(expected_element, element);
 }
 
 #[test]
 fn test_scalar_mul_div() {
     let mut element = Rq::from(&ELEMENT[..]);
-    let mut fourier_repr = FourierReprRq::dft(element.clone());
+    let mut ntt_repr = NTTDomainRq::dft(element.clone());
     element *= Zq::from(653_i16);
-    fourier_repr *= Zq::from(653_i16);
-    assert_eq!(element, FourierReprRq::inv_dft(fourier_repr.clone()));
+    ntt_repr *= Zq::from(653_i16);
+    assert_eq!(element, NTTDomainRq::inv_dft(ntt_repr.clone()));
 
     element *= ONE / Zq::from(5321_i16);
-    fourier_repr *= ONE / Zq::from(5321_i16);
-    assert_eq!(element, FourierReprRq::inv_dft(fourier_repr.clone()));
+    ntt_repr *= ONE / Zq::from(5321_i16);
+    assert_eq!(element, NTTDomainRq::inv_dft(ntt_repr.clone()));
 }
 
 #[test]
 fn test_add_sub() {
     let mut element = Rq::from(&ELEMENT[..]);
-    let mut fourier_repr = FourierReprRq::dft(element.clone());
+    let mut ntt_repr = NTTDomainRq::dft(element.clone());
     let base_element = element.clone();
-    let base_fourier_repr = fourier_repr.clone();
+    let base_ntt_repr = ntt_repr.clone();
 
     element += &base_element;
-    fourier_repr += &base_fourier_repr;
-    assert_eq!(element, FourierReprRq::inv_dft(fourier_repr.clone()));
+    ntt_repr += &base_ntt_repr;
+    assert_eq!(element, NTTDomainRq::inv_dft(ntt_repr.clone()));
 
     element -= &base_element;
-    fourier_repr -= &base_fourier_repr;
-    assert_eq!(element, FourierReprRq::inv_dft(fourier_repr));
+    ntt_repr -= &base_ntt_repr;
+    assert_eq!(element, NTTDomainRq::inv_dft(ntt_repr));
     assert_eq!(Rq::from(&ELEMENT[..]), element);
 }

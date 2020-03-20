@@ -10,7 +10,7 @@ use super::util;
 ///Degree of the ring extension
 pub const N: usize = 256;
 
-/// Describes types that are algebraic ring extensions of Zq and have a fourier representation, i.e.
+/// Describes types that are algebraic ring extensions of Zq and have a chinese remainder representation, i.e.
 /// the ring extension has degree N and Zq contains N-th roots of unity. Then the ring elements have
 /// a representation in memory as vectors with component-wise addition and multiplication.
 pub trait Ring: Eq + Clone + 
@@ -22,15 +22,15 @@ pub trait Ring: Eq + Clone +
              for<'a> SubAssign<&'a Self> + 
              MulAssign<Zq>
 {
-    type FourierRepr: RingFourierRepr<StdRepr = Self>;
+    type NTTDomain: RingNTTDomain<StdRepr = Self>;
 
     fn zero() -> Self;
-    fn dft(self) -> Self::FourierRepr;
+    fn ntt(self) -> Self::NTTDomain;
     fn compress<const D : u16>(&self) -> CompressedRq<D>;
     fn decompress<const D : u16>(x: &CompressedRq<D>) -> Self;
 }
 
-pub trait RingFourierRepr: Eq + Clone + base64::Encodable +
+pub trait RingNTTDomain: Eq + Clone + base64::Encodable +
                         for<'a> Add<&'a Self, Output = Self> + 
                         for<'a> Sub<&'a Self, Output = Self> + 
                         for<'a> Mul<&'a Self, Output = Self> + 
@@ -38,10 +38,10 @@ pub trait RingFourierRepr: Eq + Clone + base64::Encodable +
                         for<'a> SubAssign<&'a Self> +
                         for<'a> MulAssign<&'a Self>
 {
-    type StdRepr: Ring<FourierRepr = Self>;
+    type StdRepr: Ring<NTTDomain = Self>;
 
     fn zero() -> Self;
-    fn inv_dft(self) -> Self::StdRepr;
+    fn inv_ntt(self) -> Self::StdRepr;
     fn mul_scalar(&mut self, x: Zq);
 
     /// More efficient but semantically equivalent to `self += a * b`

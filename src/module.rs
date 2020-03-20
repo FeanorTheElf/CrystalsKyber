@@ -14,7 +14,7 @@ pub const DIM: usize = 3;
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Module<R: Ring>
 {
-    data: [R::FourierRepr; DIM]
+    data: [R::NTTDomain; DIM]
 }
 
 impl<R: Ring> Module<R>
@@ -29,7 +29,7 @@ impl<R: Ring> Module<R>
     pub fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
     {
         Ok(Module {
-            data: util::try_create_array(|_i| R::FourierRepr::decode(data))?
+            data: util::try_create_array(|_i| R::NTTDomain::decode(data))?
         })
     }
 }
@@ -85,12 +85,12 @@ impl<'a, R: Ring> Sub<Module<R>> for &'a Module<R>
 
 impl<'a, R: Ring> Mul<&'a Module<R>> for &'a Module<R>
 {
-    type Output = R::FourierRepr;
+    type Output = R::NTTDomain;
 
     #[inline(always)]
-    fn mul(self, rhs: &'a Module<R>) -> R::FourierRepr
+    fn mul(self, rhs: &'a Module<R>) -> R::NTTDomain
     {
-        let mut result = R::FourierRepr::zero();
+        let mut result = R::NTTDomain::zero();
         for i in 0..DIM {
             result.add_product(&self.data[i], &rhs.data[i]);
         }
@@ -98,12 +98,12 @@ impl<'a, R: Ring> Mul<&'a Module<R>> for &'a Module<R>
     }
 }
 
-impl<'a, R: Ring> Mul<&'a R::FourierRepr> for Module<R>
+impl<'a, R: Ring> Mul<&'a R::NTTDomain> for Module<R>
 {
     type Output = Module<R>;
 
     #[inline(always)]
-    fn mul(mut self, rhs: &'a R::FourierRepr) -> Module<R>
+    fn mul(mut self, rhs: &'a R::NTTDomain) -> Module<R>
     {
         self *= rhs;
         return self;
@@ -132,10 +132,10 @@ impl<'a, R: Ring> SubAssign<&'a Module<R>> for Module<R>
     }
 }
 
-impl<'a, R: Ring> MulAssign<&'a R::FourierRepr> for Module<R>
+impl<'a, R: Ring> MulAssign<&'a R::NTTDomain> for Module<R>
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: &'a R::FourierRepr) 
+    fn mul_assign(&mut self, rhs: &'a R::NTTDomain) 
     {
         for i in 0..DIM {
             self.data[i] *= rhs;
@@ -154,20 +154,20 @@ impl<R: Ring> MulAssign<Zq> for Module<R>
     }
 }
 
-impl<'a, R: Ring> From<&'a [R::FourierRepr]> for Module<R>
+impl<'a, R: Ring> From<&'a [R::NTTDomain]> for Module<R>
 {
     #[inline(always)]
-    fn from(data: &'a [R::FourierRepr]) -> Module<R>
+    fn from(data: &'a [R::NTTDomain]) -> Module<R>
     {
         assert_eq!(DIM, data.len());
         Self::from(util::create_array(|i| data[i].clone()))
     }
 }
 
-impl<R: Ring> From<[R::FourierRepr; DIM]> for Module<R>
+impl<R: Ring> From<[R::NTTDomain; DIM]> for Module<R>
 {
     #[inline(always)]
-    fn from(data: [R::FourierRepr; DIM]) -> Module<R>
+    fn from(data: [R::NTTDomain; DIM]) -> Module<R>
     {
         Module {
             data: data
@@ -227,7 +227,7 @@ impl<'a, R: Ring> Mul<&'a Module<R>> for TransposedMat<'a, R>
     #[inline(always)]
     fn mul(self, rhs: &'a Module<R>) -> Module<R>
     {
-        let mut result: [R::FourierRepr; DIM] = util::create_array(|_i| R::FourierRepr::zero());
+        let mut result: [R::NTTDomain; DIM] = util::create_array(|_i| R::NTTDomain::zero());
         for row in 0..DIM {
             for col in 0..DIM {
                 result[row].add_product(&self.data.rows[col].data[row], &rhs.data[col]);
@@ -239,10 +239,10 @@ impl<'a, R: Ring> Mul<&'a Module<R>> for TransposedMat<'a, R>
     }
 }
 
-impl<R: Ring> From<[[R::FourierRepr; DIM]; DIM]> for Matrix<R>
+impl<R: Ring> From<[[R::NTTDomain; DIM]; DIM]> for Matrix<R>
 {
     #[inline(always)]
-    fn from(data: [[R::FourierRepr; DIM]; DIM]) -> Matrix<R>
+    fn from(data: [[R::NTTDomain; DIM]; DIM]) -> Matrix<R>
     {
         let [fst, snd, trd] = data;
         Matrix {
@@ -280,18 +280,18 @@ impl<T: Ring> Module<T>
     {
         let [fst, snd, trd] = self.data;
         CompressedModule {
-            data: [RingFourierRepr::inv_dft(fst).compress(), 
-                RingFourierRepr::inv_dft(snd).compress(), 
-                RingFourierRepr::inv_dft(trd).compress()]
+            data: [RingNTTDomain::inv_ntt(fst).compress(), 
+                RingNTTDomain::inv_ntt(snd).compress(), 
+                RingNTTDomain::inv_ntt(trd).compress()]
         }
     }
 
     pub fn decompress<const D: u16>(x: &CompressedModule<D>) -> Module<T>
     {
         Module {
-            data: [T::dft(T::decompress(&x.data[0])),
-                T::dft(T::decompress(&x.data[1])), 
-                T::dft(T::decompress(&x.data[2]))]
+            data: [T::ntt(T::decompress(&x.data[0])),
+                T::ntt(T::decompress(&x.data[1])), 
+                T::ntt(T::decompress(&x.data[2]))]
         }
     }
 }

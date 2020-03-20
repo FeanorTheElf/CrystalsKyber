@@ -71,6 +71,12 @@ fn cli_decrypt(key: &String, ciphertext: &String) -> base64::Result<String>
 
 fn main() 
 {
+    let mut data = [zq::ZERO; 256];
+    data[128] = zq::ONE;
+    let el = avx_r::Rq::from(data);
+    let square = el.clone().ntt() * &el.ntt();
+    println!("{:?}", square.inv_ntt());
+    return;
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2{
         println!("Usage: crystals_kyber.exe command parameters...");
