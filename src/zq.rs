@@ -16,7 +16,6 @@ pub const Q: u32 = 7681;
 
 pub const ZERO: Zq = Zq { value: 0 };
 pub const ONE: Zq = Zq { value: 1 };
-pub const NEG_ONE: Zq = Zq { value: Q - 1 };
 
 /// All 512-th root of unity
 pub const UNITY_ROOTS_512: [Zq; 512] = zq_arr![

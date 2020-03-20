@@ -187,7 +187,7 @@ impl Debug for Rq
 
 impl Ring for Rq
 {
-    type NTTDomain = NTTDomainRq;
+    type ChineseRemainderRepr = NTTDomainRq;
 
     fn zero() -> Rq
     {
@@ -196,9 +196,9 @@ impl Ring for Rq
         }
     }
 
-    fn ntt(self) -> NTTDomainRq
+    fn chinese_remainder_repr(self) -> NTTDomainRq
     {
-        NTTDomainRq::ntt(self)
+        NTTDomainRq::chinese_remainder_repr(self)
     }
 
     fn compress<const D: u16>(&self) -> CompressedRq<D>
@@ -324,9 +324,8 @@ impl NTTDomainRq
         return values;
     }
 
-    // Calculates the chinese remainder representation of an element in Rq
     #[inline(always)]
-    fn ntt(mut r: Rq) -> NTTDomainRq
+    fn chinese_remainder_repr(mut r: Rq) -> NTTDomainRq
     {
         // we do not need the exact fourier transformation (i.e. the evaluation at
         // all 256-th roots of unity), but the evaluation at all primitive 512-th
@@ -341,9 +340,8 @@ impl NTTDomainRq
         }
     }
 
-    // Calculates the element in R with the given chinese remainder representation
     #[inline(always)]
-    fn inv_ntt(ntt_repr: NTTDomainRq) -> Rq
+    fn coefficient_repr(ntt_repr: NTTDomainRq) -> Rq
     {
         let inv_n: Zq = ONE / Zq::from(N as i16);
         let mut result = Self::fft(ntt_repr.values, |i| REV_UNITY_ROOTS_512[2 * i]);
@@ -547,9 +545,9 @@ impl base64::Encodable for NTTDomainRq
     }
 }
 
-impl RingNTTDomain for NTTDomainRq
+impl RingChineseRemainderRepr for NTTDomainRq
 {
-    type StdRepr = Rq;
+    type CoefficientRepr = Rq;
     
     fn zero() -> NTTDomainRq
     {
@@ -573,9 +571,9 @@ impl RingNTTDomain for NTTDomainRq
         }
     }
 
-    fn inv_ntt(self) -> Rq
+    fn coefficient_repr(self) -> Rq
     {
-        NTTDomainRq::inv_ntt(self)
+        NTTDomainRq::coefficient_repr(self)
     }
 }
 
@@ -603,39 +601,51 @@ const ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663,
 fn bench_ntt(bencher: &mut test::Bencher) {
     let element = Rq::from(&ELEMENT[..]);
     bencher.iter(|| {
-        let ntt_repr = NTTDomainRq::ntt(element.clone());
-        assert_eq!(element, ntt_repr.inv_ntt());
+        let ntt_repr = NTTDomainRq::chinese_remainder_repr(element.clone());
+        assert_eq!(element, ntt_repr.coefficient_repr());
     });
 }
 
 #[test]
 fn test_scalar_mul_div() {
     let mut element = Rq::from(&ELEMENT[..]);
-    let mut ntt_repr = NTTDomainRq::ntt(element.clone());
+    let mut ntt_repr = NTTDomainRq::chinese_remainder_repr(element.clone());
     element *= Zq::from(653_i16);
     ntt_repr *= Zq::from(653_i16);
-    assert_eq!(element, NTTDomainRq::inv_ntt(ntt_repr.clone()));
+    assert_eq!(element, ntt_repr.clone().coefficient_repr());
 
     element *= ONE / Zq::from(5321_i16);
     ntt_repr *= ONE / Zq::from(5321_i16);
-    assert_eq!(element, NTTDomainRq::inv_ntt(ntt_repr.clone()));
+    assert_eq!(element, ntt_repr.coefficient_repr());
 }
 
 #[test]
 fn test_add_sub() {
     let mut element = Rq::from(&ELEMENT[..]);
-    let mut ntt_repr = NTTDomainRq::ntt(element.clone());
+    let mut ntt_repr = NTTDomainRq::chinese_remainder_repr(element.clone());
     let base_element = element.clone();
     let base_ntt_repr = ntt_repr.clone();
 
     element += &base_element;
     ntt_repr += &base_ntt_repr;
-    assert_eq!(element, NTTDomainRq::inv_ntt(ntt_repr.clone()));
+    assert_eq!(element, NTTDomainRq::coefficient_repr(ntt_repr.clone()));
 
     element -= &base_element;
     ntt_repr -= &base_ntt_repr;
-    assert_eq!(element, NTTDomainRq::inv_ntt(ntt_repr));
+    assert_eq!(element, NTTDomainRq::coefficient_repr(ntt_repr));
     assert_eq!(Rq::from(&ELEMENT[..]), element);
+}
+
+#[test]
+fn test_mul() {
+    let mut data: [Zq; 256] = [ZERO; 256];
+    data[128] = ONE;
+    let element = Rq::from(data);
+    let ntt_repr = element.clone().chinese_remainder_repr() * &element.chinese_remainder_repr();
+
+    let mut expected: [Zq; 256] = [ZERO; 256];
+    expected[0] = -ONE;
+    assert_eq!(Rq::from(expected), ntt_repr.coefficient_repr());
 }
 
 #[test]

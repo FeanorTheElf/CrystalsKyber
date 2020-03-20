@@ -22,15 +22,15 @@ pub trait Ring: Eq + Clone +
              for<'a> SubAssign<&'a Self> + 
              MulAssign<Zq>
 {
-    type NTTDomain: RingNTTDomain<StdRepr = Self>;
+    type ChineseRemainderRepr: RingChineseRemainderRepr<CoefficientRepr = Self>;
 
     fn zero() -> Self;
-    fn ntt(self) -> Self::NTTDomain;
+    fn chinese_remainder_repr(self) -> Self::ChineseRemainderRepr;
     fn compress<const D : u16>(&self) -> CompressedRq<D>;
     fn decompress<const D : u16>(x: &CompressedRq<D>) -> Self;
 }
 
-pub trait RingNTTDomain: Eq + Clone + base64::Encodable +
+pub trait RingChineseRemainderRepr: Eq + Clone + base64::Encodable +
                         for<'a> Add<&'a Self, Output = Self> + 
                         for<'a> Sub<&'a Self, Output = Self> + 
                         for<'a> Mul<&'a Self, Output = Self> + 
@@ -38,10 +38,10 @@ pub trait RingNTTDomain: Eq + Clone + base64::Encodable +
                         for<'a> SubAssign<&'a Self> +
                         for<'a> MulAssign<&'a Self>
 {
-    type StdRepr: Ring<NTTDomain = Self>;
+    type CoefficientRepr: Ring<ChineseRemainderRepr = Self>;
 
     fn zero() -> Self;
-    fn inv_ntt(self) -> Self::StdRepr;
+    fn coefficient_repr(self) -> Self::CoefficientRepr;
     fn mul_scalar(&mut self, x: Zq);
 
     /// More efficient but semantically equivalent to `self += a * b`
