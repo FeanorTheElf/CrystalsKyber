@@ -1,5 +1,5 @@
 use super::util;
-use super::avx_r;
+use super::ref_r;
 use super::module;
 use super::zq::*;
 use super::ring::*;
@@ -7,8 +7,8 @@ use super::module::*;
 
 use sha3::digest::{ ExtendableOutput, Input, XofReader };
 
-type Rq = avx_r::Rq;
-type NTTDomainRq = avx_r::NTTDomainRq;
+type Rq = ref_r::Rq;
+type NTTDomainRq = ref_r::NTTDomainRq;
 type Module = module::Module<Rq>;
 type Matrix = module::Matrix<Rq>;
 
