@@ -3,6 +3,7 @@ use super::avx_zq::*;
 use super::r::*;
 use super::util;
 use super::avx_util;
+use super::base64;
 
 use std::arch::x86_64::*;
 
@@ -524,6 +525,22 @@ impl RingFourierRepr for FourierReprR
     fn inv_dft(self) -> R
     {
         FourierReprR::inv_dft(self)
+    }
+
+    fn encode(&self, encoder: &mut base64::Encoder)
+    {
+        for vector in &self.values {
+            for element in &vector.as_array() {
+                encoder.encode_bits(element.representative_pos() as u16, 16);
+            }
+        }
+    }
+
+    fn decode(data: &mut base64::Decoder) -> Self
+    {
+        FourierReprR {
+            values: util::create_array(|_i| Zq8::from(util::create_array(|_j| data.read_bits(16) as i16)))
+        }
     }
 }
 

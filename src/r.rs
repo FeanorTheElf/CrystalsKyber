@@ -4,6 +4,9 @@ use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, SubAssign };
 use std::cmp::Eq;
 use std::convert::From;
 
+use super::base64;
+use super::util;
+
 pub const N: usize = 256;
 
 pub trait RingElement: Eq + Clone + 
@@ -37,15 +40,34 @@ pub trait RingFourierRepr: Eq + Clone +
     fn inv_dft(self) -> Self::StdRepr;
     fn mul_scalar(&mut self, x: Zq);
     fn add_product(&mut self, a: &Self, b: &Self);
+    fn encode(&self, encoder: &mut base64::Encoder);
+    fn decode(data: &mut base64::Decoder) -> Self;
 }
 
 #[derive(Clone)]
-pub struct CompressedR<const D : u16>
+pub struct CompressedR<const D: u16>
 {
     pub data: [CompressedZq<D>; N]
 }
 
-impl<const D : u16> std::fmt::Debug for CompressedR<D>
+impl<const D: u16> CompressedR<D>
+{
+    pub fn encode(&self, encoder: &mut base64::Encoder)
+    {
+        for i in 0..N {
+            self.data[i].encode(encoder);
+        }
+    }
+
+    pub fn decode(data: &mut base64::Decoder) -> Self
+    {
+        CompressedR {
+            data: util::create_array(|_i| CompressedZq::decode(data))
+        }
+    }
+}
+
+impl<const D: u16> std::fmt::Debug for CompressedR<D>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result
     {

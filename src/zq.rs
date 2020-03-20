@@ -4,6 +4,8 @@ use std::fmt::{ Debug, Display, Formatter };
 use std::convert::From;
 use std::mem::swap;
 
+use super::base64;
+
 macro_rules! zq_arr {
     ($($num:literal),*) => {
         [$(Zq { value: $num }),*]
@@ -248,6 +250,21 @@ impl From<i16> for Zq
 pub struct CompressedZq<const D: u16>
 {
     pub data: u16
+}
+
+impl<const D: u16> CompressedZq<D>
+{
+    pub fn encode(&self, encoder: &mut base64::Encoder)
+    {
+        encoder.encode_bits(self.data, D as usize);
+    }
+
+    pub fn decode(data: &mut base64::Decoder) -> Self
+    {
+        CompressedZq {
+            data: data.read_bits(D as usize)
+        }
+    }
 }
 
 impl<const D: u16> Debug for CompressedZq<D>

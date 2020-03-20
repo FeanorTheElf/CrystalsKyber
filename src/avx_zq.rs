@@ -6,6 +6,7 @@ use std::fmt::{ Debug };
 use super::zq;
 use super::zq::{ Zq, ONE };
 use super::util::create_array;
+use super::util;
 use super::avx_util;
 use super::avx_util::{ constant_f32, constant_i32, constant_zero, constant_u32 };
 
@@ -88,6 +89,20 @@ impl Zq8
         }
     }
 
+    pub fn as_array(&self) -> [Zq; 8]
+    {
+        let data = unsafe { [
+            _mm256_extract_epi32(self.data, 0), 
+            _mm256_extract_epi32(self.data, 1), 
+            _mm256_extract_epi32(self.data, 2), 
+            _mm256_extract_epi32(self.data, 3), 
+            _mm256_extract_epi32(self.data, 4), 
+            _mm256_extract_epi32(self.data, 5), 
+            _mm256_extract_epi32(self.data, 6), 
+            _mm256_extract_epi32(self.data, 7)
+        ] };
+        return util::create_array(|i| Zq::from_perfect(data[i] as i16));
+    }
 }
 
 pub fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUNT: usize>(value: [Zq8; VEC_COUNT]) -> [Zq8; VEC_COUNT]

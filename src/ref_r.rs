@@ -1,6 +1,9 @@
 use super::zq::*;
 use super::r::*;
 
+use super::util;
+use super::base64;
+
 use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, SubAssign };
 use std::cmp::{ PartialEq, Eq };
 use std::convert::From;
@@ -476,6 +479,20 @@ impl RingFourierRepr for FourierReprR
     {
         for i in 0..N {
             self.values[i] += a.values[i] * b.values[i];
+        }
+    }
+
+    fn encode(&self, encoder: &mut base64::Encoder)
+    {
+        for i in 0..N {
+            encoder.encode_bits(self.values[i].representative_pos() as u16, 16);
+        }
+    }
+
+    fn decode(data: &mut base64::Decoder) -> Self
+    {
+        FourierReprR {
+            values: util::create_array(|_i| Zq::from_perfect(data.read_bits(16) as i16))
         }
     }
 }
