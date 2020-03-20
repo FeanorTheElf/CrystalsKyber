@@ -27,6 +27,8 @@ impl Buffer
     }
 }
 
+pub type Result<T> = std::result::Result<T, ()>;
+
 pub struct Encoder
 {
     current: String,
@@ -119,9 +121,9 @@ impl Decoder
         }
     }
 
-    fn read_symbol(&mut self) -> u8 
+    fn read_symbol(&mut self) -> Result<u8> 
     {
-        let c = self.current.pop().unwrap();
+        let c = self.current.pop().ok_or(())?;
         let offset: i16 = match c {
             'a'..='z' => -71,
             'A'..='Z' => -65,
@@ -132,45 +134,34 @@ impl Decoder
         };
         let mut result: [u8; 1] = [0; 1];
         c.encode_utf8(&mut result);
-        return (result[0] as i16 + offset) as u8;
+        return Ok((result[0] as i16 + offset) as u8);
     }
 
-    pub fn read_bits(&mut self, bit_count: usize) -> u16
+    pub fn read_bits(&mut self, bit_count: usize) -> Result<u16>
     {
         assert!(bit_count <= 16);
         while self.current_buffer.length < bit_count {
-            let new_bits = self.read_symbol() as u16;
+            let new_bits = self.read_symbol()? as u16;
             self.current_buffer.write_bits(BITS_PER_SYMBOL, new_bits);
         }
-        return self.current_buffer.read_bits(bit_count);
+        return Ok(self.current_buffer.read_bits(bit_count));
     }
 
-    pub fn read(&mut self) -> u8
+    pub fn read(&mut self) -> Result<u8>
     {
-        self.read_bits(8) as u8
+        return Ok(self.read_bits(8)? as u8)
     }
 
-    pub fn read_bytes<const N: usize>(&mut self) -> [u8; N]
+    pub fn read_bytes<const N: usize>(&mut self) -> Result<[u8; N]>
     {
-        util::create_array(|_i| self.read())
+        util::try_create_array(|_i| self.read())
     }
 }
 
-impl Iterator for Decoder
+pub trait Encodable: Sized
 {
-    type Item = u8;
-
-    fn next(&mut self) -> Option<u8> {
-        let last_char = self.current.pop();
-        if let Some(c) = last_char {
-            self.current.push(c);
-        }
-        if self.current_buffer.length >= 8 || last_char.map(|c| c != '=').unwrap_or(false) {
-            Some(self.read())
-        } else {
-            None
-        }
-    }
+    fn encode(&self, encoder: &mut Encoder);
+    fn decode(data: &mut Decoder) -> Result<Self>;
 }
 
 #[test]
@@ -182,9 +173,9 @@ fn test_base64_encode_decode() {
     enc.encode(255);
     let code = enc.get();
     let mut decoder = Decoder::new(code.as_str());
-    assert_eq!(65, decoder.read());
-    assert_eq!(97, decoder.read());
-    assert_eq!(3, decoder.read());
-    assert_eq!(255, decoder.read());
+    assert_eq!(65, decoder.read().unwrap());
+    assert_eq!(97, decoder.read().unwrap());
+    assert_eq!(3, decoder.read().unwrap());
+    assert_eq!(255, decoder.read().unwrap());
 }
 

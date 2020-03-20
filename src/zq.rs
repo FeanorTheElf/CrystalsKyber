@@ -259,11 +259,11 @@ impl<const D: u16> CompressedZq<D>
         encoder.encode_bits(self.data, D as usize);
     }
 
-    pub fn decode(data: &mut base64::Decoder) -> Self
+    pub fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
     {
-        CompressedZq {
-            data: data.read_bits(D as usize)
-        }
+        Ok(CompressedZq {
+            data: data.read_bits(D as usize)?
+        })
     }
 }
 

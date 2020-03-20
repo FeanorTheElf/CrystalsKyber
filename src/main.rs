@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(non_snake_case)]
 #![feature(test)]
 #![feature(const_generics)]
 
@@ -12,61 +12,64 @@ mod avx_util;
 mod base64;
 
 mod zq;
-mod r;
-mod m;
+mod ring;
+mod module;
 
 mod ref_r;
 mod avx_zq;
 mod avx_r;
 
 use zq::*;
-use r::*;
-use m::*;
+use ring::*;
+use module::*;
+
+use base64::Encodable;
 
 use sha3::digest::{ ExtendableOutput, Input, XofReader };
 
 use std::time::SystemTime;
 
-type R = avx_r::R;
-type FourierReprR = avx_r::FourierReprR;
-type M = m::Module<R>;
-type Mat = m::Mat<R>;
+type Rq = avx_r::Rq;
+type FourierReprRq = avx_r::FourierReprRq;
+type Module = module::Module<Rq>;
+type Matrix = module::Matrix<Rq>;
 
 const COMPRESSION_VECTOR: u16 = 11;
 const COMPRESSION_ELEMENT: u16 = 3;
 
-type PK = (CompressedM<COMPRESSION_VECTOR>, [u8; 32]);
-type SK = M;
-type Ciphertext = (CompressedM<COMPRESSION_VECTOR>, CompressedR<COMPRESSION_ELEMENT>);
-type Message = [u8; 32];
+type Seed = [u8; 32];
+type PublicKey = (CompressedM<COMPRESSION_VECTOR>, Seed);
+type SecretKey = Module;
+type Ciphertext = (CompressedM<COMPRESSION_VECTOR>, CompressedRq<COMPRESSION_ELEMENT>);
+type Plaintext = [u8; 32];
 
-fn enc(pk: &PK, plaintext: Message, enc_seed: [u8; 32]) -> Ciphertext
+fn encrypt(pk: &PublicKey, plaintext: Plaintext, enc_seed: Seed) -> Ciphertext
 {
-    let mut noise = expand_randomness_shake_256(&enc_seed);
-    let r = sample_error_distribution_vector(&mut noise);
-    let e1 = sample_error_distribution_vector(&mut noise);
-    let e2 = sample_error_distribution_element(&mut noise).dft();
-    let a = sample_uniform_matrix(expand_randomness_shake_128(&pk.1));
-    let u = a.transpose() * &r + &e1;
-    let t = M::decompress(&pk.0);
-    let message = R::decompress(&CompressedR::from_data(plaintext));
+    let mut noise_random = expand_randomness_shake_256(enc_seed);
+    let r = sample_error_distribution_vector(&mut noise_random);
+    let e1 = sample_error_distribution_vector(&mut noise_random);
+    let e2 = sample_error_distribution_element(&mut noise_random).dft();
+    let A = sample_uniform_matrix(expand_randomness_shake_128(pk.1));
+    let u = A.transpose() * &r + &e1;
+    let t = Module::decompress(&pk.0);
+    let message = Rq::decompress(&CompressedRq::from_data(plaintext));
     let v = (&t * &r) + &e2 + &message.dft(); 
     return (u.compress(), v.inv_dft().compress());
 }
 
-fn dec(sk: &SK, c: Ciphertext) -> Message
+fn decrypt(sk: &SecretKey, c: Ciphertext) -> Plaintext
 {
-    let m = R::decompress(&c.1) - &(sk * &M::decompress(&c.0)).inv_dft();
+    let m = Rq::decompress(&c.1) - &(sk * &Module::decompress(&c.0)).inv_dft();
     return m.compress().get_data();
 }
 
-fn key_gen(matrix_seed: [u8; 32], secret_seed: [u8; 32]) -> (SK, PK)
+fn key_gen(matrix_seed: Seed, secret_seed: Seed) -> (SecretKey, PublicKey)
 {
-    let a: Mat = sample_uniform_matrix(expand_randomness_shake_128(&matrix_seed));
-    let mut noise = expand_randomness_shake_256(&secret_seed);
-    let s: M = sample_error_distribution_vector(&mut noise);
-    let e: M = sample_error_distribution_vector(&mut noise);
-    let b: M = &a * &s + &e;
+    let a: Matrix = sample_uniform_matrix(expand_randomness_shake_128(matrix_seed));
+    let mut noise = expand_randomness_shake_256(secret_seed);
+    let s: Module = sample_error_distribution_vector(&mut noise);
+    let e: Module = sample_error_distribution_vector(&mut noise);
+    let b: Module = &a * &s + &e;
     return (s, (b.compress(), matrix_seed));
 }
 
@@ -94,49 +97,49 @@ fn sample_centered_binomial_distribution(random: u8) -> Zq
     return Zq::from_perfect(value);
 }
 
-fn sample_error_distribution_vector<T: XofReader>(reader: &mut T) -> M
+fn sample_error_distribution_vector<T: XofReader>(reader: &mut T) -> Module
 {
     let mut buffer: [u8; N] = [0; N];
     let data = util::create_array(|_| {
         reader.read(&mut buffer);
-        R::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i]))).dft()
+        Rq::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i]))).dft()
     });
-    return M::from(data);
+    return Module::from(data);
 }
 
-fn sample_error_distribution_element<T: XofReader>(reader: &mut T) -> R
+fn sample_error_distribution_element<T: XofReader>(reader: &mut T) -> Rq
 {
     let mut buffer: [u8; N] = [0; N];
     reader.read(&mut buffer);
-    return R::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i])));
+    return Rq::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i])));
 }
 
-fn expand_randomness_shake_256(seed: &[u8; 32]) -> sha3::Sha3XofReader
+fn expand_randomness_shake_256(seed: Seed) -> sha3::Sha3XofReader
 {
     let mut hasher = sha3::Shake256::default();
     hasher.input(&seed);
     return hasher.xof_result();
 }
 
-fn expand_randomness_shake_128(seed: &[u8; 32]) -> sha3::Sha3XofReader
+fn expand_randomness_shake_128(seed: Seed) -> sha3::Sha3XofReader
 {
     let mut hasher = sha3::Shake128::default();
     hasher.input(&seed);
     return hasher.xof_result();
 }
 
-fn sample_uniform_matrix<T: XofReader>(reader: T) -> Mat
+fn sample_uniform_matrix<T: XofReader>(reader: T) -> Matrix
 {
     let mut iter = sample_uniform_zq(reader);
-    let data: [[FourierReprR; DIM]; DIM] = util::create_array(|_row| 
+    let data: [[FourierReprRq; DIM]; DIM] = util::create_array(|_row| 
         util::create_array(|_col| {
-            R::from(util::create_array_it(&mut iter)).dft()
+            Rq::from(util::create_array_it(&mut iter)).dft()
         })
     );
-    return Mat::from(data);
+    return Matrix::from(data);
 }
 
-fn time_seed() -> [u8; 32]
+fn time_seed() -> Seed
 {
     let nanos: u32 = (SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() % 1073741824) as u32;
     let mut hasher = sha3::Shake256::default();
@@ -147,60 +150,100 @@ fn time_seed() -> [u8; 32]
     return result;
 }
 
+fn cli_encrypt(key: &String, message: &String) -> base64::Result<String>
+{
+    let mut key_decoder = base64::Decoder::new(key.as_str());
+    let pk: PublicKey = (CompressedM::decode(&mut key_decoder)?, key_decoder.read_bytes()?);
+    let mut message_decoder = base64::Decoder::new(message.as_str());
+    let message: Plaintext = message_decoder.read_bytes()?;
+    let ciphertext = encrypt(&pk, message, time_seed());
+
+    let mut encoder = base64::Encoder::new();
+    ciphertext.0.encode(&mut encoder);
+    ciphertext.1.encode(&mut encoder);
+    return Ok(encoder.get());
+}
+
+fn cli_decrypt(key: &String, ciphertext: &String) -> base64::Result<String>
+{
+    let mut key_decoder = base64::Decoder::new(key.as_str());
+    let sk: SecretKey = Module::decode(&mut key_decoder)?;
+    let mut ciphertext_decoder = base64::Decoder::new(ciphertext.as_str());
+    let ciphertext: Ciphertext = (CompressedM::decode(&mut ciphertext_decoder)?, CompressedRq::decode(&mut ciphertext_decoder)?);
+    let message: Plaintext = decrypt(&sk, ciphertext);
+
+    let mut encoder = base64::Encoder::new();
+    encoder.encode_bytes(&message);
+    return Ok(encoder.get());
+}
+
 fn main() 
 {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2{
-        println!("Usage: crystals_kyber.exe command parameters... [options...]");
+        println!("Usage: crystals_kyber.exe command parameters...");
         return;
     }
     match args[1].as_str() {
         "enc" => {
             if args.len() < 4 {
-                println!("Usage: crystals_kyber.exe enc public_key message [options...]");
-                println!("  where message are 32 base64 encoded bytes");
+                println!("Usage: crystals_kyber.exe enc public_key plaintext");
+                println!("  where message are 32 base64 encoded bytes, i.e. 43 characters of A-Z, a-z, 0-9, +, / followed by =");
+                println!("  longer messages are also allowed, then only the prefix will be used");
                 return;
             }
-            let mut key_decoder = base64::Decoder::new(args[2].as_str());
-            let pk: PK = (CompressedM::decode(&mut key_decoder), key_decoder.read_bytes());
-            let mut message_decoder = base64::Decoder::new(args[3].as_str());
-            let message: Message = message_decoder.read_bytes();
-            let ciphertext = enc(&pk, message, time_seed());
-
-            let mut encoder = base64::Encoder::new();
-            ciphertext.0.encode(&mut encoder);
-            ciphertext.1.encode(&mut encoder);
-            println!("Ciphertext is {}", encoder.get());
+            let encryption = cli_encrypt(&args[2], &args[3]);
+            match encryption {
+                Ok(ciphertext) => {
+                    println!("");
+                    println!("Ciphertext is {}", ciphertext);
+                    println!("");
+                },
+                Err(_) => {
+                    println!("Message or key invalid!");
+                }
+            }
         },
         "dec" => {
             if args.len() < 4 {
-                println!("Usage: crystals_kyber.exe dec secret_key ciphertext [options...]");
+                println!("Usage: crystals_kyber.exe dec secret_key ciphertext");
                 return;
             }
-            let mut key_decoder = base64::Decoder::new(args[2].as_str());
-            let sk: SK = M::decode(&mut key_decoder);
-            let mut ciphertext_decoder = base64::Decoder::new(args[3].as_str());
-            let ciphertext: Ciphertext = (CompressedM::decode(&mut ciphertext_decoder), CompressedR::decode(&mut ciphertext_decoder));
-            let message: Message = dec(&sk, ciphertext);
-
-            let mut encoder = base64::Encoder::new();
-            encoder.encode_bytes(&message);
-            println!("Message is {}", encoder.get());
+            let decryption = cli_decrypt(&args[2], &args[3]);
+            match decryption {
+                Ok(plaintext) => {
+                    println!("");
+                    println!("Plaintext is {}", plaintext);
+                    println!("");
+                },
+                Err(_) => {
+                    println!("Ciphertext or key invalid!");
+                }
+            }
         },
         "gen" => {
             let (sk, pk) = key_gen(time_seed(), time_seed());
             let mut pk_encoder = base64::Encoder::new();
             pk.0.encode(&mut pk_encoder);
             pk_encoder.encode_bytes(&pk.1);
+            println!("");
             println!("Public key is {}", pk_encoder.get());
 
             let mut sk_encoder = base64::Encoder::new();
             sk.encode(&mut sk_encoder);
+            println!("");
             println!("Secret key is {}", sk_encoder.get());
+            println!("");
         },
         _ => println!("Command must be one of enc, dec, gen, got command {}", args[1])
     };
 }
+
+#[cfg(test)]
+const TEST_MESSAGE: Plaintext = [
+    0x00, 0x01, 0xFA, 0x09, 0x53, 0xFF, 0xF0, 0x38, 0x19, 0xA4, 0x4D, 0x82, 0x28, 0x64, 0xEF, 0x00, 
+    0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+];
 
 #[bench]
 fn bench_all(bencher: &mut test::Bencher) {
@@ -213,14 +256,10 @@ fn bench_all(bencher: &mut test::Bencher) {
         enc_seed[2] = 3;
 
         let (sk, pk) = key_gen(matrix_seed, secret_seed);
-        let mut expected_message: Message = [0; 32];
-        expected_message[0] = 1;
-        expected_message[2] = 0xF0;
-        expected_message[12] = 0x1A;
-        let ciphertext = enc(&pk, expected_message, enc_seed);
-        let message = dec(&sk, ciphertext);
+        let ciphertext = encrypt(&pk, TEST_MESSAGE, enc_seed);
+        let message = decrypt(&sk, ciphertext);
         for j in 0..32 {
-            assert!(expected_message[j] == message[j], "Expected messages to be the same, differ at index {}: {} != {}", j, expected_message[j], message[j]);
+            assert!(TEST_MESSAGE[j] == message[j], "Expected messages to be the same, differ at index {}: {} != {}", j, TEST_MESSAGE[j], message[j]);
         }
     });
 }
@@ -247,12 +286,8 @@ fn bench_encryption(bencher: &mut test::Bencher) {
     enc_seed[2] = 3;
 
     let (_sk, pk) = key_gen(matrix_seed, secret_seed);
-    let mut expected_message: Message = [0; 32];
-    expected_message[0] = 1;
-    expected_message[2] = 0xF0;
-    expected_message[12] = 0x1A;
     bencher.iter(|| {
-        let _ciphertext = enc(&pk, expected_message, enc_seed);
+        let _ciphertext = encrypt(&pk, TEST_MESSAGE, enc_seed);
     });
 }
 
@@ -266,12 +301,8 @@ fn bench_decryption(bencher: &mut test::Bencher) {
     enc_seed[2] = 3;
 
     let (sk, pk) = key_gen(matrix_seed, secret_seed);
-    let mut expected_message: Message = [0; 32];
-    expected_message[0] = 1;
-    expected_message[2] = 0xF0;
-    expected_message[12] = 0x1A;
-    let ciphertext = enc(&pk, expected_message, enc_seed);
+    let ciphertext = encrypt(&pk, TEST_MESSAGE, enc_seed);
     bencher.iter(|| {
-        let _m = dec(&sk, ciphertext.clone());
+        let _m = decrypt(&sk, ciphertext.clone());
     });
 }

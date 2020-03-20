@@ -19,6 +19,26 @@ pub fn create_array<T, F, const N: usize>(f: F) -> [T; N]
     return create_array_it(&mut (0..N).map(f));
 }
 
+pub fn try_create_array_it<I, T, E, const N: usize>(it: &mut I) -> Result<[T; N], E>
+    where I: Iterator<Item = Result<T, E>>
+{
+    unsafe {
+        let mut result: MaybeUninit<[T; N]> = MaybeUninit::uninit();
+        let result_ptr = (*result.as_mut_ptr()).as_mut_ptr();
+        for i in 0..N {
+            std::ptr::write(result_ptr.offset(i as isize), it.next().unwrap()?);
+        }
+        return Ok(result.assume_init());
+    }
+}
+
+pub fn try_create_array<T, E, F, const N: usize>(f: F) -> Result<[T; N], E>
+    where F: FnMut(usize) -> Result<T, E>
+{
+    return try_create_array_it(&mut (0..N).map(f));
+}
+
+
 pub struct CartesianIterator<I, J>
     where I: Iterator, I::Item: Clone, J: Iterator + Clone
 {

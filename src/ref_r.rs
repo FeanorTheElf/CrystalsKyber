@@ -1,5 +1,5 @@
 use super::zq::*;
-use super::r::*;
+use super::ring::*;
 
 use super::util;
 use super::base64;
@@ -11,63 +11,63 @@ use std::fmt::{ Formatter, Debug };
 
 // Type of elements in the ring R := Zq[X] / (X^N + 1)
 #[derive(Clone)]
-pub struct R
+pub struct Rq
 {
     data: [Zq; N]
 }
 
-impl PartialEq for R
+impl PartialEq for Rq
 {
-    fn eq(&self, rhs: &R) -> bool
+    fn eq(&self, rhs: &Rq) -> bool
     {
         (0..N).all(|i| self.data[i] == rhs.data[i])
     }
 }
 
-impl Eq for R {}
+impl Eq for Rq {}
 
-impl<'a> Add<&'a R> for R
+impl<'a> Add<&'a Rq> for Rq
 {
-    type Output = R;
+    type Output = Rq;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a R) -> R
+    fn add(mut self, rhs: &'a Rq) -> Rq
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a> Add<R> for &'a R
+impl<'a> Add<Rq> for &'a Rq
 {
-    type Output = R;
+    type Output = Rq;
 
     #[inline(always)]
-    fn add(self, mut rhs: R) -> R
+    fn add(self, mut rhs: Rq) -> Rq
     {
         rhs += self;
         return rhs;
     }
 }
 
-impl<'a> Sub<&'a R> for R
+impl<'a> Sub<&'a Rq> for Rq
 {
-    type Output = R;
+    type Output = Rq;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a R) -> Self::Output
+    fn sub(mut self, rhs: &'a Rq) -> Self::Output
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a> Sub<R> for &'a R
+impl<'a> Sub<Rq> for &'a Rq
 {
-    type Output = R;
+    type Output = Rq;
 
     #[inline(always)]
-    fn sub(self, mut rhs: R) -> Self::Output
+    fn sub(self, mut rhs: Rq) -> Self::Output
     {
         rhs -= self;
         rhs *= NEG_ONE;
@@ -75,9 +75,9 @@ impl<'a> Sub<R> for &'a R
     }
 }
 
-impl Mul<Zq> for R
+impl Mul<Zq> for Rq
 {
-    type Output = R;
+    type Output = Rq;
 
     #[inline(always)]
     fn mul(mut self, rhs: Zq) -> Self::Output
@@ -87,10 +87,10 @@ impl Mul<Zq> for R
     }
 }
 
-impl<'a> AddAssign<&'a R> for R
+impl<'a> AddAssign<&'a Rq> for Rq
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a R)
+    fn add_assign(&mut self, rhs: &'a Rq)
     {
         for i in 0..N {
             self.data[i] += rhs.data[i];
@@ -98,10 +98,10 @@ impl<'a> AddAssign<&'a R> for R
     }
 }
 
-impl<'a> SubAssign<&'a R> for R
+impl<'a> SubAssign<&'a Rq> for Rq
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a R)
+    fn sub_assign(&mut self, rhs: &'a Rq)
     {
         for i in 0..N {
             self.data[i] -= rhs.data[i];
@@ -109,7 +109,7 @@ impl<'a> SubAssign<&'a R> for R
     }
 }
 
-impl MulAssign<Zq> for R
+impl MulAssign<Zq> for Rq
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: Zq)
@@ -120,32 +120,32 @@ impl MulAssign<Zq> for R
     }
 }
 
-impl<'a> From<&'a [i16]> for R
+impl<'a> From<&'a [i16]> for Rq
 {
-    fn from(value: &'a [i16]) -> R {
+    fn from(value: &'a [i16]) -> Rq {
         assert_eq!(N, value.len());
         let mut data: [Zq; N] = [ZERO; N];
         for i in 0..N {
             data[i] = Zq::from(value[i]);
         }
-        return R {
+        return Rq {
             data: data
         };
     }
 }
 
-impl From<[Zq; N]> for R
+impl From<[Zq; N]> for Rq
 {
     #[inline(always)]
-    fn from(data: [Zq; N]) -> R
+    fn from(data: [Zq; N]) -> Rq
     {
-        R {
+        Rq {
             data: data
         }
     }
 }
 
-impl Debug for R
+impl Debug for Rq
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
@@ -156,40 +156,40 @@ impl Debug for R
     }
 }
 
-impl RingElement for R
+impl Ring for Rq
 {
-    type FourierRepr = FourierReprR;
+    type FourierRepr = FourierReprRq;
 
-    fn zero() -> R
+    fn zero() -> Rq
     {
-        return R {
+        return Rq {
             data: [ZERO; N]
         }
     }
 
-    fn dft(self) -> FourierReprR 
+    fn dft(self) -> FourierReprRq 
     {
-        FourierReprR::dft(self)
+        FourierReprRq::dft(self)
     }
     
-    fn compress<const D: u16>(&self) -> CompressedR<D>
+    fn compress<const D: u16>(&self) -> CompressedRq<D>
     {
         let mut data = [CompressedZq::zero(); N];
         for i in 0..N {
             data[i] = self.data[i].compress();
         }
-        return CompressedR {
+        return CompressedRq {
             data: data
         };
     }
 
-    fn decompress<const D: u16>(x: &CompressedR<D>) -> R
+    fn decompress<const D: u16>(x: &CompressedRq<D>) -> Rq
     {
         let mut data = [ZERO; N];
         for i in 0..N {
             data[i] = Zq::decompress(x.data[i]);
         }
-        return R {
+        return Rq {
             data: data
         };
     }
@@ -199,12 +199,12 @@ impl RingElement for R
 // the values of the polynomial at each root of unity
 // in Zq
 #[derive(Clone)]
-pub struct FourierReprR
+pub struct FourierReprRq
 {
     values: [Zq; N]
 }
 
-impl FourierReprR
+impl FourierReprRq
 {
     #[inline(never)]
     fn fft<F>(mut values: [Zq; N], unity_root: F) -> [Zq; N]
@@ -273,88 +273,88 @@ impl FourierReprR
     }
 
     // Calculates the fourier representation of an element in R
-    fn dft(r: R) -> FourierReprR
+    fn dft(r: Rq) -> FourierReprRq
     {
-        FourierReprR {
+        FourierReprRq {
             values: Self::fft(r.data, |i| UNITY_ROOTS[i])
         }
     }
 
     // Calculates the element in R with the given fourier representation
-    fn inv_dft(fourier_repr: FourierReprR) -> R
+    fn inv_dft(fourier_repr: FourierReprRq) -> Rq
     {
         let inv_n: Zq = ONE / Zq::from(N as i16);
         let mut result = Self::fft(fourier_repr.values, |i| UNITY_ROOTS[(N - i) & 0xFF]);
         for i in 0..N {
             result[i] *= inv_n;
         }
-        return R {
+        return Rq {
             data: result
         };
     }
 }
 
-impl PartialEq for FourierReprR
+impl PartialEq for FourierReprRq
 {
-    fn eq(&self, rhs: &FourierReprR) -> bool
+    fn eq(&self, rhs: &FourierReprRq) -> bool
     {
         (0..N).all(|i| self.values[i] == rhs.values[i])
     }
 }
 
-impl Eq for FourierReprR {}
+impl Eq for FourierReprRq {}
 
-impl<'a> Add<&'a FourierReprR> for FourierReprR
+impl<'a> Add<&'a FourierReprRq> for FourierReprRq
 {
-    type Output = FourierReprR;
+    type Output = FourierReprRq;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a FourierReprR) -> Self::Output
+    fn add(mut self, rhs: &'a FourierReprRq) -> Self::Output
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a> Add<FourierReprR> for &'a FourierReprR
+impl<'a> Add<FourierReprRq> for &'a FourierReprRq
 {
-    type Output = FourierReprR;
+    type Output = FourierReprRq;
 
     #[inline(always)]
-    fn add(self, mut rhs: FourierReprR) -> Self::Output
+    fn add(self, mut rhs: FourierReprRq) -> Self::Output
     {
         rhs += self;
         return rhs;
     }
 }
 
-impl<'a> Mul<&'a FourierReprR> for FourierReprR
+impl<'a> Mul<&'a FourierReprRq> for FourierReprRq
 {
-    type Output = FourierReprR;
+    type Output = FourierReprRq;
 
     #[inline(always)]
-    fn mul(mut self, rhs: &'a FourierReprR) -> Self::Output
+    fn mul(mut self, rhs: &'a FourierReprRq) -> Self::Output
     {
         self *= rhs;
         return self;
     }
 }
 
-impl<'a> Mul<FourierReprR> for &'a FourierReprR
+impl<'a> Mul<FourierReprRq> for &'a FourierReprRq
 {
-    type Output = FourierReprR;
+    type Output = FourierReprRq;
 
     #[inline(always)]
-    fn mul(self, mut rhs: FourierReprR) -> Self::Output
+    fn mul(self, mut rhs: FourierReprRq) -> Self::Output
     {
         rhs *= self;
         return rhs;
     }
 }
 
-impl Mul<Zq> for FourierReprR
+impl Mul<Zq> for FourierReprRq
 {
-    type Output = FourierReprR;
+    type Output = FourierReprRq;
 
     #[inline(always)]
     fn mul(mut self, rhs: Zq) -> Self::Output
@@ -364,24 +364,24 @@ impl Mul<Zq> for FourierReprR
     }
 }
 
-impl<'a> Sub<&'a FourierReprR> for FourierReprR
+impl<'a> Sub<&'a FourierReprRq> for FourierReprRq
 {
-    type Output = FourierReprR;
+    type Output = FourierReprRq;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a FourierReprR) -> Self::Output
+    fn sub(mut self, rhs: &'a FourierReprRq) -> Self::Output
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a> Sub<FourierReprR> for &'a FourierReprR
+impl<'a> Sub<FourierReprRq> for &'a FourierReprRq
 {
-    type Output = FourierReprR;
+    type Output = FourierReprRq;
 
     #[inline(always)]
-    fn sub(self, mut rhs: FourierReprR) -> Self::Output
+    fn sub(self, mut rhs: FourierReprRq) -> Self::Output
     {
         rhs -= self;
         rhs *= ZERO - ONE;
@@ -389,37 +389,37 @@ impl<'a> Sub<FourierReprR> for &'a FourierReprR
     }
 }
 
-impl<'a> AddAssign<&'a FourierReprR> for FourierReprR
+impl<'a> AddAssign<&'a FourierReprRq> for FourierReprRq
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a FourierReprR) {
+    fn add_assign(&mut self, rhs: &'a FourierReprRq) {
         for i in 0..N {
             self.values[i] += rhs.values[i];
         }
     }
 }
 
-impl<'a> SubAssign<&'a FourierReprR> for FourierReprR
+impl<'a> SubAssign<&'a FourierReprRq> for FourierReprRq
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a FourierReprR) {
+    fn sub_assign(&mut self, rhs: &'a FourierReprRq) {
         for i in 0..N {
             self.values[i] -= rhs.values[i];
         }
     }
 }
 
-impl<'a> MulAssign<&'a FourierReprR> for FourierReprR
+impl<'a> MulAssign<&'a FourierReprRq> for FourierReprRq
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: &'a FourierReprR) {
+    fn mul_assign(&mut self, rhs: &'a FourierReprRq) {
         for i in 0..N {
             self.values[i] *= rhs.values[i];
         }
     }
 }
 
-impl MulAssign<Zq> for FourierReprR
+impl MulAssign<Zq> for FourierReprRq
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: Zq) {
@@ -429,21 +429,21 @@ impl MulAssign<Zq> for FourierReprR
     }
 }
 
-impl<'a> From<&'a [i16]> for FourierReprR
+impl<'a> From<&'a [i16]> for FourierReprRq
 {
-    fn from(value: &'a [i16]) -> FourierReprR {
+    fn from(value: &'a [i16]) -> FourierReprRq {
         assert_eq!(N, value.len());
         let mut values: [Zq; N] = [ZERO; N];
         for i in 0..N {
             values[i] = Zq::from(value[i]);
         }
-        return FourierReprR {
+        return FourierReprRq {
             values: values
         };
     }
 }
 
-impl Debug for FourierReprR
+impl Debug for FourierReprRq
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
@@ -454,34 +454,8 @@ impl Debug for FourierReprR
     }
 }
 
-impl RingFourierRepr for FourierReprR
+impl base64::Encodable for FourierReprRq
 {
-    type StdRepr = R;
-
-    fn zero() -> FourierReprR
-    {
-        return FourierReprR {
-            values: [ZERO; N]
-        }
-    }
-
-    fn inv_dft(self) -> R 
-    {
-        FourierReprR::inv_dft(self)
-    }
-
-    fn mul_scalar(&mut self, x: Zq)
-    {
-        *self *= x;
-    }
-
-    fn add_product(&mut self, a: &FourierReprR, b: &FourierReprR)
-    {
-        for i in 0..N {
-            self.values[i] += a.values[i] * b.values[i];
-        }
-    }
-
     fn encode(&self, encoder: &mut base64::Encoder)
     {
         for i in 0..N {
@@ -489,10 +463,39 @@ impl RingFourierRepr for FourierReprR
         }
     }
 
-    fn decode(data: &mut base64::Decoder) -> Self
+    fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
     {
-        FourierReprR {
-            values: util::create_array(|_i| Zq::from_perfect(data.read_bits(16) as i16))
+        Ok(FourierReprRq {
+            values: util::try_create_array(|_i| Ok(Zq::from_perfect(data.read_bits(16)? as i16)))?
+        })
+    }
+}
+
+impl RingFourierRepr for FourierReprRq
+{
+    type StdRepr = Rq;
+
+    fn zero() -> FourierReprRq
+    {
+        return FourierReprRq {
+            values: [ZERO; N]
+        }
+    }
+
+    fn inv_dft(self) -> Rq 
+    {
+        FourierReprRq::inv_dft(self)
+    }
+
+    fn mul_scalar(&mut self, x: Zq)
+    {
+        *self *= x;
+    }
+
+    fn add_product(&mut self, a: &FourierReprRq, b: &FourierReprRq)
+    {
+        for i in 0..N {
+            self.values[i] += a.values[i] * b.values[i];
         }
     }
 }
@@ -532,48 +535,48 @@ const DFT_ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 266
 
 #[bench]
 fn bench_fft(bencher: &mut test::Bencher) {
-    let element = R::from(&ELEMENT[..]);
-    let expected_fourier_reprn = FourierReprR::from(&DFT_ELEMENT[..]);
+    let element = Rq::from(&ELEMENT[..]);
+    let expected_fourier_reprn = FourierReprRq::from(&DFT_ELEMENT[..]);
     bencher.iter(|| {
-        let fourier_repr = FourierReprR::dft(element.clone());
+        let fourier_repr = FourierReprRq::dft(element.clone());
         assert_eq!(expected_fourier_reprn, fourier_repr);
     });
 }
 
 #[test]
 fn test_inv_fft() {
-    let fourier_repr = FourierReprR::from(&DFT_ELEMENT[..]);
-    let expected_element = R::from(&ELEMENT[..]);
-    let element = FourierReprR::inv_dft(fourier_repr);
+    let fourier_repr = FourierReprRq::from(&DFT_ELEMENT[..]);
+    let expected_element = Rq::from(&ELEMENT[..]);
+    let element = FourierReprRq::inv_dft(fourier_repr);
     assert_eq!(expected_element, element);
 }
 
 #[test]
 fn test_scalar_mul_div() {
-    let mut element = R::from(&ELEMENT[..]);
-    let mut fourier_repr = FourierReprR::dft(element.clone());
+    let mut element = Rq::from(&ELEMENT[..]);
+    let mut fourier_repr = FourierReprRq::dft(element.clone());
     element *= Zq::from(653_i16);
     fourier_repr *= Zq::from(653_i16);
-    assert_eq!(element, FourierReprR::inv_dft(fourier_repr.clone()));
+    assert_eq!(element, FourierReprRq::inv_dft(fourier_repr.clone()));
 
     element *= ONE / Zq::from(5321_i16);
     fourier_repr *= ONE / Zq::from(5321_i16);
-    assert_eq!(element, FourierReprR::inv_dft(fourier_repr.clone()));
+    assert_eq!(element, FourierReprRq::inv_dft(fourier_repr.clone()));
 }
 
 #[test]
 fn test_add_sub() {
-    let mut element = R::from(&ELEMENT[..]);
-    let mut fourier_repr = FourierReprR::dft(element.clone());
+    let mut element = Rq::from(&ELEMENT[..]);
+    let mut fourier_repr = FourierReprRq::dft(element.clone());
     let base_element = element.clone();
     let base_fourier_repr = fourier_repr.clone();
 
     element += &base_element;
     fourier_repr += &base_fourier_repr;
-    assert_eq!(element, FourierReprR::inv_dft(fourier_repr.clone()));
+    assert_eq!(element, FourierReprRq::inv_dft(fourier_repr.clone()));
 
     element -= &base_element;
     fourier_repr -= &base_fourier_repr;
-    assert_eq!(element, FourierReprR::inv_dft(fourier_repr));
-    assert_eq!(R::from(&ELEMENT[..]), element);
+    assert_eq!(element, FourierReprRq::inv_dft(fourier_repr));
+    assert_eq!(Rq::from(&ELEMENT[..]), element);
 }

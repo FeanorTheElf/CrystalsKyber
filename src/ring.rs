@@ -7,9 +7,13 @@ use std::convert::From;
 use super::base64;
 use super::util;
 
+///Degree of the ring extension
 pub const N: usize = 256;
 
-pub trait RingElement: Eq + Clone + 
+/// Describes types that are algebraic ring extensions of Zq and have a fourier representation, i.e.
+/// the ring extension has degree N and Zq contains N-th roots of unity. Then the ring elements have
+/// a representation in memory as vectors with component-wise addition and multiplication.
+pub trait Ring: Eq + Clone + 
              for<'a> From<&'a [i16]> +
              for<'a> Add<&'a Self, Output = Self> + 
              for<'a> Sub<&'a Self, Output = Self> + 
@@ -22,11 +26,11 @@ pub trait RingElement: Eq + Clone +
 
     fn zero() -> Self;
     fn dft(self) -> Self::FourierRepr;
-    fn compress<const D : u16>(&self) -> CompressedR<D>;
-    fn decompress<const D : u16>(x: &CompressedR<D>) -> Self;
+    fn compress<const D : u16>(&self) -> CompressedRq<D>;
+    fn decompress<const D : u16>(x: &CompressedRq<D>) -> Self;
 }
 
-pub trait RingFourierRepr: Eq + Clone +
+pub trait RingFourierRepr: Eq + Clone + base64::Encodable +
                         for<'a> Add<&'a Self, Output = Self> + 
                         for<'a> Sub<&'a Self, Output = Self> + 
                         for<'a> Mul<&'a Self, Output = Self> + 
@@ -34,40 +38,42 @@ pub trait RingFourierRepr: Eq + Clone +
                         for<'a> SubAssign<&'a Self> +
                         for<'a> MulAssign<&'a Self>
 {
-    type StdRepr: RingElement<FourierRepr = Self>;
+    type StdRepr: Ring<FourierRepr = Self>;
 
     fn zero() -> Self;
     fn inv_dft(self) -> Self::StdRepr;
     fn mul_scalar(&mut self, x: Zq);
+
+    /// More efficient but semantically equivalent to `self += a * b`
     fn add_product(&mut self, a: &Self, b: &Self);
-    fn encode(&self, encoder: &mut base64::Encoder);
-    fn decode(data: &mut base64::Decoder) -> Self;
 }
 
+/// (Lossful) compression of a ring element using D bits. Therefore, the error
+/// of encoding and decoding is at most Q/2^d
 #[derive(Clone)]
-pub struct CompressedR<const D: u16>
+pub struct CompressedRq<const D: u16>
 {
     pub data: [CompressedZq<D>; N]
 }
 
-impl<const D: u16> CompressedR<D>
+impl<const D: u16> base64::Encodable for CompressedRq<D>
 {
-    pub fn encode(&self, encoder: &mut base64::Encoder)
+    fn encode(&self, encoder: &mut base64::Encoder)
     {
         for i in 0..N {
             self.data[i].encode(encoder);
         }
     }
 
-    pub fn decode(data: &mut base64::Decoder) -> Self
+    fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
     {
-        CompressedR {
-            data: util::create_array(|_i| CompressedZq::decode(data))
-        }
+        Ok(CompressedRq {
+            data: util::try_create_array(|_i| CompressedZq::decode(data))?
+        })
     }
 }
 
-impl<const D: u16> std::fmt::Debug for CompressedR<D>
+impl<const D: u16> std::fmt::Debug for CompressedRq<D>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result
     {
@@ -82,7 +88,7 @@ impl<const D: u16> std::fmt::Debug for CompressedR<D>
     }
 }
 
-impl CompressedR<1>
+impl CompressedRq<1>
 {
     pub fn get_data(&self) -> [u8; 32]
     {
@@ -93,13 +99,13 @@ impl CompressedR<1>
         return result;
     }
 
-    pub fn from_data(m: [u8; 32]) -> CompressedR<1>
+    pub fn from_data(m: [u8; 32]) -> CompressedRq<1>
     {
         let mut result: [CompressedZq<1>; N] = [CompressedZq::zero(); N];
         for i in 0..N {
             result[i] = CompressedZq::from_bit(m[i/8] >> (i % 8));
         }
-        return CompressedR {
+        return CompressedRq {
             data: result
         };
     }
