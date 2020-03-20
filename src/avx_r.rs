@@ -13,10 +13,12 @@ use std::cmp::{ PartialEq, Eq };
 use std::convert::From;
 use std::fmt::{ Formatter, Debug };
 
+/// The count of Zq values in one Zq8 vector
 const VEC_SIZE: usize = 8;
+/// The count of Zq8 vectors we need to store all coefficients from one element in Rq = Zq[X] / (X^256 + 1)
 const VEC_COUNT: usize = N / VEC_SIZE;
 
-// Type of elements in the ring R := Zq[X] / (X^256 + 1)
+/// The ring Rq := Zq[X] / (X^256 + 1), using avx instructions for algebraic operations.
 #[derive(Clone)]
 pub struct Rq
 {
@@ -228,9 +230,9 @@ impl Ring for Rq
     }
 }
 
-// Fourier representation of an element of R, i.e.
-// the values of the polynomial at each root of unity
-// in Zq
+/// Fourier representation of an element of Rq, i.e.
+/// the values of the polynomial at each root of unity
+/// in Zq
 #[derive(Clone)]
 pub struct FourierReprRq
 {
@@ -239,7 +241,17 @@ pub struct FourierReprRq
 
 impl FourierReprRq
 {
-
+    /// Executes the i-th step in the Cooley–Tukey FFT algorithm. Concretely, calculates the DFT
+    /// of x_j, x_j+d, ..., x_j+(n-1)d for each j in 0..d and each k in 0..n where d=N/n and
+    /// n = 2^i. For more detail, see ref_r::FourierReprR::fft.
+    /// 
+    /// As input, we require the DFTs of x_j, x_j+2d, ..., x_j+(n-1)4d to be stored in src[k * 2d + j] 
+    /// for each j in 0..2d and each k in 0..n/2.  The result DFT of x_j, x_j+d, ..., x_j+(n-1)d for k in 0..n
+    /// will be stored in dst[k * d + j]. Therefore, this is exactly fft_iter_dxn() except that in-and output
+    /// are transposed.
+    /// 
+    /// The given function should, given l, return the 256-th root of unity to the power of l
+    /// (or to the power of -l in case of an inverse DFT).
     #[inline(always)]
     fn fft_iter_nxd<F>(dst: &mut [Zq8; VEC_COUNT], src: &[Zq8; VEC_COUNT], i: usize, unity_root: F)
         where F: Fn(usize) -> Zq
@@ -260,6 +272,17 @@ impl FourierReprRq
         }
     }
 
+    /// Executes the i-th step in the Cooley–Tukey FFT algorithm. Concretely, calculates the DFT
+    /// of x_j, x_j+d, ..., x_j+(n-1)d for each j in 0..d and each k in 0..n where d=N/n and
+    /// n = 2^i. For more detail, see ref_r::FourierReprR::fft.
+    /// 
+    /// As input, we require the DFTs of x_j, x_j+2d, ..., x_j+(n-1)4d to be stored in src[j * n/2 + k] 
+    /// for each j in 0..2d and each k in 0..n/2.  The result DFT of x_j, x_j+d, ..., x_j+(n-1)d for k in 0..n
+    /// will be stored in dst[j * n + k]. Therefore, this is exactly fft_iter_nxd() except that in-and output
+    /// are transposed.
+    /// 
+    /// The given function should, given l, return the 256-th root of unity to the power of l
+    /// (or to the power of -l in case of an inverse DFT).
     #[inline(always)]
     fn fft_iter_dxn<F>(dst: &mut [Zq8; VEC_COUNT], src: &[Zq8; VEC_COUNT], i: usize, unity_root: F)
         where F: Fn(usize) -> Zq
@@ -291,9 +314,7 @@ impl FourierReprRq
         Self::fft_iter_nxd(&mut temp, &values, 3, &unity_root);
         Self::fft_iter_nxd(&mut values, &temp, 4, &unity_root);
 
-        // temp corresponds to nxd = 32x8 array
         values = transpose_vectorized_matrix::<16, 32>(values);
-        // temp corresponds to dxn = 8x32 array
 
         Self::fft_iter_dxn(&mut temp, &values, 5, &unity_root);
         Self::fft_iter_dxn(&mut values, &temp, 6, &unity_root);

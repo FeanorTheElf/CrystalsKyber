@@ -15,6 +15,8 @@ use super::zq::ZERO;
 
 pub const Q: i32 = zq::Q as i32;
 
+/// Vectors of 8 elements of the field Zq = Z/qZ for q = Q = 7681. Addition
+/// and multiplication are done component-wise.
 #[derive(Clone, Copy)]
 pub struct Zq8
 {
@@ -26,31 +28,7 @@ const NEG_Q: i32 = -Q;
 const Q_DEC: i32 = Q - 1;
 const Q_INV: f32 = 1. / (Q as f32);
 
-macro_rules! impl_get {
-    ($($ident:ident: $index:literal),*) => {
-        $(
-            pub fn $ident(&self) -> Zq
-            {
-                Zq::from( unsafe { _mm256_extract_epi32(self.data, $index) } as i16)
-            }
-        )*
-    };
-}
-
-macro_rules! impl_set {
-    ($($ident:ident: $index:literal),*) => {
-        $(
-            pub fn $ident(&mut self, value: Zq)
-            {
-                unsafe {
-                    self.data = _mm256_blend_epi32(self.data, _mm256_set1_epi32(value.representative_pos() as i32), 1 << $index);
-                }    
-            }
-        )*
-    };
-}
-
-// works only if product <= 7680*7680
+// Works only if product <= 7680^2, but this is sufficient to reduce the products mod q.
 unsafe fn mod_q(product: __m256i) -> __m256i
 {
     // use floating point arithmetic with correction
@@ -78,9 +56,6 @@ impl Zq8
             data: unsafe { _mm256_setzero_si256() }
         }
     }
-
-    impl_get!(get_0: 0, get_1: 1, get_2: 2, get_3: 3, get_4: 4, get_5: 5, get_6: 6, get_7: 7);
-    impl_set!(set_0: 0, set_1: 1, set_2: 2, set_3: 3, set_4: 4, set_5: 5, set_6: 6, set_7: 7);
 
     pub fn broadcast(x: Zq) -> Zq8
     {
@@ -173,8 +148,8 @@ impl Debug for Zq8
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
     {
-        write!(f, "({}, {}, {}, {}, {}, {}, {}, {})", self.get_0(), self.get_1(), self.get_2(), 
-            self.get_3(), self.get_4(), self.get_5(), self.get_6(), self.get_7())
+        let data = self.as_array();
+        write!(f, "({}, {}, {}, {}, {}, {}, {}, {})", data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7])
     }
 }
 
@@ -228,6 +203,8 @@ impl MulAssign<Zq> for Zq8
     }
 }
 
+// We only support to divide the vector by a scalar, since a component-wise vector-vector
+// multiplication is super inefficient with avx.
 impl DivAssign<Zq> for Zq8
 {
     #[inline(always)]
@@ -334,36 +311,6 @@ impl Zq8
 }
 
 #[test]
-fn test_get_set() {
-    let mut vector = Zq8::zero();
-    assert_eq!(ZERO, vector.get_0());
-    assert_eq!(ZERO, vector.get_1());
-    assert_eq!(ZERO, vector.get_2());
-    assert_eq!(ZERO, vector.get_3());
-    assert_eq!(ZERO, vector.get_4());
-    assert_eq!(ZERO, vector.get_5());
-    assert_eq!(ZERO, vector.get_6());
-    assert_eq!(ZERO, vector.get_7());
-
-    vector.set_1(Zq::from(1_i16));
-    vector.set_2(Zq::from(2_i16));
-    vector.set_3(Zq::from(3_i16));
-    vector.set_4(Zq::from(4_i16));
-    vector.set_5(Zq::from(5_i16));
-    vector.set_6(Zq::from(6_i16));
-    vector.set_7(Zq::from(7_i16));
-
-    assert_eq!(0, vector.get_0().representative_pos());
-    assert_eq!(1, vector.get_1().representative_pos());
-    assert_eq!(2, vector.get_2().representative_pos());
-    assert_eq!(3, vector.get_3().representative_pos());
-    assert_eq!(4, vector.get_4().representative_pos());
-    assert_eq!(5, vector.get_5().representative_pos());
-    assert_eq!(6, vector.get_6().representative_pos());
-    assert_eq!(7, vector.get_7().representative_pos());
-}
-
-#[test]
 fn test_from() {
     let v: Zq8 = Zq8::from([(-3) * 7681, 4 * 7681 + 625, 1, 0, -7680, 2 * 7681 + 3000, -1, 2 * 7681 + 6000]);
     let w: Zq8 = Zq8::from([0, 625, 1, 0, 1, 3000, 7680, 6000]);
@@ -394,6 +341,7 @@ fn test_mul() {
 
 #[test]
 fn test_modulo_q() {
+    // Check that the hacky mod_q procedure really works for all values in (Q - 1)^2
     for x in 0..(Q - 1)*(Q - 1) {
         let p: i32 = x as i32;
         let f: f32 = p as f32;

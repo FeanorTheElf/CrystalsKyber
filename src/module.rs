@@ -9,13 +9,15 @@ use std::convert::From;
 
 pub const DIM: usize = 3;
 
+/// The module R^d where R is the given algebraic ring and d = DIM = 3.
+/// It supports multiplication which is done component-wise in the ring R.
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct Module<T: Ring>
+pub struct Module<R: Ring>
 {
-    data: [T::FourierRepr; DIM]
+    data: [R::FourierRepr; DIM]
 }
 
-impl<T: Ring> Module<T>
+impl<R: Ring> Module<R>
 {
     pub fn encode(&self, encoder: &mut base64::Encoder)
     {
@@ -27,53 +29,53 @@ impl<T: Ring> Module<T>
     pub fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
     {
         Ok(Module {
-            data: util::try_create_array(|_i| T::FourierRepr::decode(data))?
+            data: util::try_create_array(|_i| R::FourierRepr::decode(data))?
         })
     }
 }
 
-impl<'a, T: Ring> Add<&'a Module<T>> for Module<T>
+impl<'a, R: Ring> Add<&'a Module<R>> for Module<R>
 {
-    type Output = Module<T>;
+    type Output = Module<R>;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a Module<T>) -> Module<T>
+    fn add(mut self, rhs: &'a Module<R>) -> Module<R>
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a, T: Ring> Add<Module<T>> for &'a Module<T>
+impl<'a, R: Ring> Add<Module<R>> for &'a Module<R>
 {
-    type Output = Module<T>;
+    type Output = Module<R>;
 
     #[inline(always)]
-    fn add(self, mut rhs: Module<T>) -> Module<T>
+    fn add(self, mut rhs: Module<R>) -> Module<R>
     {
         rhs += self;
         return rhs;
     }
 }
 
-impl<'a, T: Ring> Sub<&'a Module<T>> for Module<T>
+impl<'a, R: Ring> Sub<&'a Module<R>> for Module<R>
 {
-    type Output = Module<T>;
+    type Output = Module<R>;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a Module<T>) -> Module<T>
+    fn sub(mut self, rhs: &'a Module<R>) -> Module<R>
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a, T: Ring> Sub<Module<T>> for &'a Module<T>
+impl<'a, R: Ring> Sub<Module<R>> for &'a Module<R>
 {
-    type Output = Module<T>;
+    type Output = Module<R>;
 
     #[inline(always)]
-    fn sub(self, mut rhs: Module<T>) -> Module<T>
+    fn sub(self, mut rhs: Module<R>) -> Module<R>
     {
         rhs -= self;
         rhs *= NEG_ONE;
@@ -81,14 +83,14 @@ impl<'a, T: Ring> Sub<Module<T>> for &'a Module<T>
     }
 }
 
-impl<'a, T: Ring> Mul<&'a Module<T>> for &'a Module<T>
+impl<'a, R: Ring> Mul<&'a Module<R>> for &'a Module<R>
 {
-    type Output = T::FourierRepr;
+    type Output = R::FourierRepr;
 
     #[inline(always)]
-    fn mul(self, rhs: &'a Module<T>) -> T::FourierRepr
+    fn mul(self, rhs: &'a Module<R>) -> R::FourierRepr
     {
-        let mut result = T::FourierRepr::zero();
+        let mut result = R::FourierRepr::zero();
         for i in 0..DIM {
             result.add_product(&self.data[i], &rhs.data[i]);
         }
@@ -96,22 +98,22 @@ impl<'a, T: Ring> Mul<&'a Module<T>> for &'a Module<T>
     }
 }
 
-impl<'a, T: Ring> Mul<&'a T::FourierRepr> for Module<T>
+impl<'a, R: Ring> Mul<&'a R::FourierRepr> for Module<R>
 {
-    type Output = Module<T>;
+    type Output = Module<R>;
 
     #[inline(always)]
-    fn mul(mut self, rhs: &'a T::FourierRepr) -> Module<T>
+    fn mul(mut self, rhs: &'a R::FourierRepr) -> Module<R>
     {
         self *= rhs;
         return self;
     }
 }
 
-impl<'a, T: Ring> AddAssign<&'a Module<T>> for Module<T>
+impl<'a, R: Ring> AddAssign<&'a Module<R>> for Module<R>
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a Module<T>) 
+    fn add_assign(&mut self, rhs: &'a Module<R>) 
     {
         for i in 0..DIM {
             self.data[i] += &rhs.data[i];
@@ -119,10 +121,10 @@ impl<'a, T: Ring> AddAssign<&'a Module<T>> for Module<T>
     }
 }
 
-impl<'a, T: Ring> SubAssign<&'a Module<T>> for Module<T>
+impl<'a, R: Ring> SubAssign<&'a Module<R>> for Module<R>
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a Module<T>) 
+    fn sub_assign(&mut self, rhs: &'a Module<R>) 
     {
         for i in 0..DIM {
             self.data[i] -= &rhs.data[i];
@@ -130,10 +132,10 @@ impl<'a, T: Ring> SubAssign<&'a Module<T>> for Module<T>
     }
 }
 
-impl<'a, T: Ring> MulAssign<&'a T::FourierRepr> for Module<T>
+impl<'a, R: Ring> MulAssign<&'a R::FourierRepr> for Module<R>
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: &'a T::FourierRepr) 
+    fn mul_assign(&mut self, rhs: &'a R::FourierRepr) 
     {
         for i in 0..DIM {
             self.data[i] *= rhs;
@@ -141,7 +143,7 @@ impl<'a, T: Ring> MulAssign<&'a T::FourierRepr> for Module<T>
     }
 }
 
-impl<T: Ring> MulAssign<Zq> for Module<T>
+impl<R: Ring> MulAssign<Zq> for Module<R>
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: Zq) 
@@ -152,20 +154,20 @@ impl<T: Ring> MulAssign<Zq> for Module<T>
     }
 }
 
-impl<'a, T: Ring> From<&'a [T::FourierRepr]> for Module<T>
+impl<'a, R: Ring> From<&'a [R::FourierRepr]> for Module<R>
 {
     #[inline(always)]
-    fn from(data: &'a [T::FourierRepr]) -> Module<T>
+    fn from(data: &'a [R::FourierRepr]) -> Module<R>
     {
         assert_eq!(DIM, data.len());
         Self::from(util::create_array(|i| data[i].clone()))
     }
 }
 
-impl<T: Ring> From<[T::FourierRepr; DIM]> for Module<T>
+impl<R: Ring> From<[R::FourierRepr; DIM]> for Module<R>
 {
     #[inline(always)]
-    fn from(data: [T::FourierRepr; DIM]) -> Module<T>
+    fn from(data: [R::FourierRepr; DIM]) -> Module<R>
     {
         Module {
             data: data
@@ -173,21 +175,23 @@ impl<T: Ring> From<[T::FourierRepr; DIM]> for Module<T>
     }
 }
 
+/// A dxd matrix over the given ring R, where d = DIM = 3.
 #[derive(PartialEq, Eq, Clone)]
-pub struct Matrix<T: Ring>
+pub struct Matrix<R: Ring>
 {
-    rows: [Module<T>; DIM]
+    rows: [Module<R>; DIM]
 }
 
+/// A reference onto the transpose of a dxd matrix over the ring R.
 #[derive(PartialEq, Eq, Clone)]
-pub struct TransposedMat<'a, T: Ring>
+pub struct TransposedMat<'a, R: Ring>
 {
-    data: &'a Matrix<T>
+    data: &'a Matrix<R>
 }
 
-impl<T: Ring> Matrix<T>
+impl<R: Ring> Matrix<R>
 {
-    pub fn transpose<'a>(&'a self) -> TransposedMat<'a, T>
+    pub fn transpose<'a>(&'a self) -> TransposedMat<'a, R>
     {
         TransposedMat {
             data: self
@@ -195,20 +199,20 @@ impl<T: Ring> Matrix<T>
     }
 }
 
-impl<'a, T: Ring> TransposedMat<'a, T>
+impl<'a, R: Ring> TransposedMat<'a, R>
 {
-    pub fn transpose(&'a self) -> &'a Matrix<T>
+    pub fn transpose(&'a self) -> &'a Matrix<R>
     {
         self.data
     }
 }
 
-impl<'a, T: Ring> Mul<&'a Module<T>> for &'a Matrix<T>
+impl<'a, R: Ring> Mul<&'a Module<R>> for &'a Matrix<R>
 {
-    type Output = Module<T>;
+    type Output = Module<R>;
 
     #[inline(always)]
-    fn mul(self, rhs: &'a Module<T>) -> Module<T> 
+    fn mul(self, rhs: &'a Module<R>) -> Module<R> 
     {
         Module {
             data: [&self.rows[0] * rhs, &self.rows[1] * rhs, &self.rows[2] * rhs]
@@ -216,14 +220,14 @@ impl<'a, T: Ring> Mul<&'a Module<T>> for &'a Matrix<T>
     }
 }
 
-impl<'a, T: Ring> Mul<&'a Module<T>> for TransposedMat<'a, T>
+impl<'a, R: Ring> Mul<&'a Module<R>> for TransposedMat<'a, R>
 {
-    type Output = Module<T>;
+    type Output = Module<R>;
 
     #[inline(always)]
-    fn mul(self, rhs: &'a Module<T>) -> Module<T>
+    fn mul(self, rhs: &'a Module<R>) -> Module<R>
     {
-        let mut result: [T::FourierRepr; DIM] = util::create_array(|_i| T::FourierRepr::zero());
+        let mut result: [R::FourierRepr; DIM] = util::create_array(|_i| R::FourierRepr::zero());
         for row in 0..DIM {
             for col in 0..DIM {
                 result[row].add_product(&self.data.rows[col].data[row], &rhs.data[col]);
@@ -235,10 +239,10 @@ impl<'a, T: Ring> Mul<&'a Module<T>> for TransposedMat<'a, T>
     }
 }
 
-impl<T: Ring> From<[[T::FourierRepr; DIM]; DIM]> for Matrix<T>
+impl<R: Ring> From<[[R::FourierRepr; DIM]; DIM]> for Matrix<R>
 {
     #[inline(always)]
-    fn from(data: [[T::FourierRepr; DIM]; DIM]) -> Matrix<T>
+    fn from(data: [[R::FourierRepr; DIM]; DIM]) -> Matrix<R>
     {
         let [fst, snd, trd] = data;
         Matrix {
@@ -248,12 +252,12 @@ impl<T: Ring> From<[[T::FourierRepr; DIM]; DIM]> for Matrix<T>
 }
 
 #[derive(Debug, Clone)]
-pub struct CompressedM<const D: u16>
+pub struct CompressedModule<const D: u16>
 {
     data: [CompressedRq<D>; DIM]
 }
 
-impl<const D: u16> base64::Encodable for CompressedM<D>
+impl<const D: u16> base64::Encodable for CompressedModule<D>
 {
     fn encode(&self, encoder: &mut base64::Encoder)
     {
@@ -264,7 +268,7 @@ impl<const D: u16> base64::Encodable for CompressedM<D>
 
     fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
     {
-        Ok(CompressedM {
+        Ok(CompressedModule {
             data: util::try_create_array(|_i| CompressedRq::decode(data))?
         })
     }
@@ -272,17 +276,17 @@ impl<const D: u16> base64::Encodable for CompressedM<D>
 
 impl<T: Ring> Module<T>
 {
-    pub fn compress<const D: u16>(self) -> CompressedM<D>
+    pub fn compress<const D: u16>(self) -> CompressedModule<D>
     {
         let [fst, snd, trd] = self.data;
-        CompressedM {
+        CompressedModule {
             data: [RingFourierRepr::inv_dft(fst).compress(), 
                 RingFourierRepr::inv_dft(snd).compress(), 
                 RingFourierRepr::inv_dft(trd).compress()]
         }
     }
 
-    pub fn decompress<const D: u16>(x: &CompressedM<D>) -> Module<T>
+    pub fn decompress<const D: u16>(x: &CompressedModule<D>) -> Module<T>
     {
         Module {
             data: [T::dft(T::decompress(&x.data[0])),

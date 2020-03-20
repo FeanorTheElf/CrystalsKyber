@@ -22,11 +22,16 @@ pub unsafe fn constant_zero() -> __m256i
     _mm256_setzero_si256()
 }
 
+/// Transposes a matrix, where the entries of each row are vectorized, i.e. 8 elements are grouped in
+/// one avx vector. In the result matrix, also the entries of each row will be grouped in avx vectors
+/// the same way.
+/// 
+/// COL_COUNT: the count of columns in the matrix (the count of entry columns, not of vector columns).
+/// 
+/// VEC_COUNT: the count of all avx vectors in the matrix. Must be divisible by COL_COUNT.
 pub unsafe fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUNT: usize>(value: [__m256i; VEC_COUNT]) -> [__m256i; VEC_COUNT]
 {
     const VEC_SIZE: usize = 8;
-
-    assert_eq!(VEC_COUNT, value.len());
     assert!(VEC_COUNT % COL_COUNT == 0);
 
     let vector_count_per_col: usize = VEC_COUNT / COL_COUNT;

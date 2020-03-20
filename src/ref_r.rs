@@ -9,7 +9,7 @@ use std::cmp::{ PartialEq, Eq };
 use std::convert::From;
 use std::fmt::{ Formatter, Debug };
 
-// Type of elements in the ring R := Zq[X] / (X^N + 1)
+/// The ring Rq := Zq[X] / (X^N + 1).
 #[derive(Clone)]
 pub struct Rq
 {
@@ -195,9 +195,9 @@ impl Ring for Rq
     }
 }
 
-// Fourier representation of an element of R, i.e.
-// the values of the polynomial at each root of unity
-// in Zq
+/// Fourier representation of an element of Rq, i.e.
+/// the values of the polynomial at each root of unity
+/// in Zq
 #[derive(Clone)]
 pub struct FourierReprRq
 {
