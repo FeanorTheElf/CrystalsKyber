@@ -9,8 +9,10 @@ use std::convert::From;
 
 pub const DIM: usize = 3;
 
-/// The module R^d where R is the given algebraic ring and d = DIM = 3.
-/// It supports multiplication which is done component-wise in the ring R.
+/// The module R^d where R is an implementation of the ring Rq and d = DIM = 3.
+/// It supports an inner product which is done component-wise in the ring R. Since
+/// R is given as a generic parameter, this type is used for both the reference
+/// and the avx implementation.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Module<R: Ring>
 {

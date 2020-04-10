@@ -1,5 +1,6 @@
 use super::util;
 use super::ref_r;
+use super::avx_r;
 use super::module;
 use super::zq::*;
 use super::ring::*;
@@ -23,13 +24,13 @@ pub type Plaintext = [u8; 32];
 
 pub fn encrypt(pk: &PublicKey, plaintext: Plaintext, enc_seed: Seed) -> Ciphertext
 {
+    let t = Module::decompress(&pk.0);
+    let A = sample_uniform_matrix(expand_randomness_shake_128(pk.1));
     let mut noise_random = expand_randomness_shake_256(enc_seed);
     let r = sample_error_distribution_vector(&mut noise_random);
     let e1 = sample_error_distribution_vector(&mut noise_random);
     let e2 = sample_error_distribution_element(&mut noise_random).chinese_remainder_repr();
-    let A = sample_uniform_matrix(expand_randomness_shake_128(pk.1));
     let u = A.transpose() * &r + &e1;
-    let t = Module::decompress(&pk.0);
     let message = Rq::decompress(&CompressedRq::from_data(plaintext));
     let v = (&t * &r) + &e2 + &message.chinese_remainder_repr(); 
     return (u.compress(), v.coefficient_repr().compress());
@@ -37,7 +38,9 @@ pub fn encrypt(pk: &PublicKey, plaintext: Plaintext, enc_seed: Seed) -> Cipherte
 
 pub fn decrypt(sk: &SecretKey, c: Ciphertext) -> Plaintext
 {
-    let m = Rq::decompress(&c.1) - &(sk * &Module::decompress(&c.0)).coefficient_repr();
+    let u = Module::decompress(&c.0);
+    let v = Rq::decompress(&c.1);
+    let m = v - &(sk * &u).coefficient_repr();
     return m.compress().get_data();
 }
 
@@ -145,12 +148,12 @@ fn bench_all(bencher: &mut test::Bencher) {
 
 #[bench]
 fn bench_key_generation(bencher: &mut test::Bencher) {
+    let mut matrix_seed = [0; 32];
+    matrix_seed[0] = 1;
+    let mut secret_seed = [0; 32];
+    secret_seed[1] = 2;
+    
     bencher.iter(|| {
-        let mut matrix_seed = [0; 32];
-        matrix_seed[0] = 1;
-        let mut secret_seed = [0; 32];
-        secret_seed[1] = 2;
-
         let (_sk, _pk) = key_gen(matrix_seed, secret_seed);
     });
 }
