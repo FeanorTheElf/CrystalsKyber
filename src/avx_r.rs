@@ -491,30 +491,6 @@ impl MulAssign<Zq> for NTTDomainRq
     }
 }
 
-impl<'a> From<&'a [i16]> for NTTDomainRq
-{
-    fn from(value: &'a [i16]) -> NTTDomainRq {
-        assert_eq!(N, value.len());
-        return NTTDomainRq {
-            values: util::create_array(|i| 
-                Zq8::from(&value[i * VEC_SIZE..(i+1) * VEC_SIZE])
-            )
-        };
-    }
-}
-
-impl<'a> From<&'a [Zq]> for NTTDomainRq
-{
-    fn from(value: &'a [Zq]) -> NTTDomainRq {
-        assert_eq!(N, value.len());
-        return NTTDomainRq {
-            values: util::create_array(|i| 
-                Zq8::from(&value[i * VEC_SIZE..(i+1) * VEC_SIZE])
-            )
-        };
-    }
-}
-
 impl Debug for NTTDomainRq
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
