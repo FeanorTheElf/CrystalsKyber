@@ -9,7 +9,7 @@ extern crate sha3;
 mod util;
 mod avx_util;
 
-mod base64;
+mod encoding;
 
 mod zq;
 mod ring;
@@ -25,7 +25,7 @@ use ring::*;
 use module::*;
 use kyber::*;
 
-use base64::Encodable;
+use encoding::{ Encodable, Encoder, Decoder };
 
 use sha3::digest::{ ExtendableOutput, Input, XofReader };
 
@@ -42,35 +42,36 @@ fn time_seed() -> Seed
     return result;
 }
 
-fn cli_encrypt(key: &String, message: &String) -> base64::Result<String>
+fn cli_encrypt(key: &String, message: &String) -> encoding::Result<String>
 {
-    let mut key_decoder = base64::Decoder::new(key.as_str());
+    let mut key_decoder = encoding::Base64Decoder::new(key.as_str());
     let pk: PublicKey = (CompressedModule::decode(&mut key_decoder)?, key_decoder.read_bytes()?);
-    let mut message_decoder = base64::Decoder::new(message.as_str());
+    let mut message_decoder = encoding::Base64Decoder::new(message.as_str());
     let message: Plaintext = message_decoder.read_bytes()?;
     let ciphertext = encrypt(&pk, message, time_seed());
 
-    let mut encoder = base64::Encoder::new();
+    let mut encoder = encoding::Base64Encoder::new();
     ciphertext.0.encode(&mut encoder);
     ciphertext.1.encode(&mut encoder);
     return Ok(encoder.get());
 }
 
-fn cli_decrypt(key: &String, ciphertext: &String) -> base64::Result<String>
+fn cli_decrypt(key: &String, ciphertext: &String) -> encoding::Result<String>
 {
-    let mut key_decoder = base64::Decoder::new(key.as_str());
-    let sk: SecretKey = Module::decode(&mut key_decoder)?;
-    let mut ciphertext_decoder = base64::Decoder::new(ciphertext.as_str());
+    let mut key_decoder = encoding::Base64Decoder::new(key.as_str());
+    let sk: SecretKey = RqVector3::decode(&mut key_decoder)?;
+    let mut ciphertext_decoder = encoding::Base64Decoder::new(ciphertext.as_str());
     let ciphertext: Ciphertext = (CompressedModule::decode(&mut ciphertext_decoder)?, CompressedRq::decode(&mut ciphertext_decoder)?);
     let message: Plaintext = decrypt(&sk, ciphertext);
 
-    let mut encoder = base64::Encoder::new();
+    let mut encoder = encoding::Base64Encoder::new();
     encoder.encode_bytes(&message);
     return Ok(encoder.get());
 }
 
 fn main() 
 {
+    // TODO: too long!
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2{
         println!("Usage: crystals_kyber.exe command parameters...");
@@ -115,13 +116,13 @@ fn main()
         },
         "gen" => {
             let (sk, pk) = key_gen(time_seed(), time_seed());
-            let mut pk_encoder = base64::Encoder::new();
+            let mut pk_encoder = encoding::Base64Encoder::new();
             pk.0.encode(&mut pk_encoder);
             pk_encoder.encode_bytes(&pk.1);
             println!("");
             println!("Public key is {}", pk_encoder.get());
 
-            let mut sk_encoder = base64::Encoder::new();
+            let mut sk_encoder = encoding::Base64Encoder::new();
             sk.encode(&mut sk_encoder);
             println!("");
             println!("Secret key is {}", sk_encoder.get());

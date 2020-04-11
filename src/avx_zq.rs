@@ -4,7 +4,7 @@ use std::cmp::{ PartialEq, Eq };
 use std::fmt::{ Debug };
 
 use super::zq;
-use super::zq::{ Zq, ONE };
+use super::zq::{ ZqElement, ONE };
 use super::util::create_array;
 use super::util;
 use super::avx_util;
@@ -15,7 +15,7 @@ pub const Q: i32 = zq::Q as i32;
 /// Vectors of 8 elements of the field Zq = Z/qZ for q = Q = 7681. Addition
 /// and multiplication are done component-wise.
 #[derive(Clone, Copy)]
-pub struct Zq8
+pub struct ZqVector8
 {
     // 8 x 32bit integer, in positive representation (i.e. in 0..Q-1)
     data: __m256i
@@ -45,23 +45,23 @@ unsafe fn mod_q(product: __m256i) -> __m256i
     return _mm256_add_epi32(rest, correction);
 }
 
-impl Zq8 
+impl ZqVector8 
 {
-    pub fn zero() -> Zq8
+    pub fn zero() -> ZqVector8
     {
-        Zq8 {
+        ZqVector8 {
             data: unsafe { _mm256_setzero_si256() }
         }
     }
 
-    pub fn broadcast(x: Zq) -> Zq8
+    pub fn broadcast(x: ZqElement) -> ZqVector8
     {
-        Zq8 {
+        ZqVector8 {
             data: unsafe { _mm256_set1_epi32(x.representative_pos() as i32) }
         }
     }
 
-    pub fn as_array(&self) -> [Zq; 8]
+    pub fn as_array(&self) -> [ZqElement; 8]
     {
         let data = unsafe { [
             _mm256_extract_epi32(self.data, 0), 
@@ -73,67 +73,67 @@ impl Zq8
             _mm256_extract_epi32(self.data, 6), 
             _mm256_extract_epi32(self.data, 7)
         ] };
-        return util::create_array(|i| Zq::from_perfect(data[i] as i16));
+        return util::create_array(|i| ZqElement::from_perfect(data[i] as i16));
     }
 }
 
-pub fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUNT: usize>(value: [Zq8; VEC_COUNT]) -> [Zq8; VEC_COUNT]
+pub fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUNT: usize>(value: [ZqVector8; VEC_COUNT]) -> [ZqVector8; VEC_COUNT]
 {
     let transposed = unsafe {
         avx_util::transpose_vectorized_matrix::<COL_COUNT, VEC_COUNT>(create_array(|i| value[i].data))
     };
-    create_array(|i| Zq8 { data: transposed[i] })
+    create_array(|i| ZqVector8 { data: transposed[i] })
 }
 
-impl<'a> From<&'a [Zq]> for Zq8
+impl<'a> From<&'a [ZqElement]> for ZqVector8
 {
-    fn from(value: &'a [Zq]) -> Zq8
+    fn from(value: &'a [ZqElement]) -> ZqVector8
     {
         assert_eq!(8, value.len());
-        return Zq8::from(
+        return ZqVector8::from(
             create_array(|i: usize| value[i].representative_pos())
         );
     }
 }
 
-impl<'a> From<&'a [i16]> for Zq8
+impl<'a> From<&'a [i16]> for ZqVector8
 {
-    fn from(value: &'a [i16]) -> Zq8
+    fn from(value: &'a [i16]) -> ZqVector8
     {
         assert_eq!(8, value.len());
-        return Zq8::from(
+        return ZqVector8::from(
             create_array(|i: usize| value[i])
         );
     }
 }
 
-impl From<[Zq; 8]> for Zq8
+impl From<[ZqElement; 8]> for ZqVector8
 {
-    fn from(value: [Zq; 8]) -> Zq8
+    fn from(value: [ZqElement; 8]) -> ZqVector8
     {
-        return Zq8::from(
+        return ZqVector8::from(
             create_array(|i: usize| value[i].representative_pos())
         );
     }
 }
 
-impl From<[i16; 8]> for Zq8
+impl From<[i16; 8]> for ZqVector8
 {
     #[inline(always)]
-    fn from(value: [i16; 8]) -> Zq8
+    fn from(value: [i16; 8]) -> ZqVector8
     {
         let data = create_array(|i| value[i] as i32);
-        return Zq8 {
+        return ZqVector8 {
             data: unsafe { mod_q(avx_util::compose::<8, 1>(data)[0]) }
         };
     }
 }
 
-impl Eq for Zq8 {}
+impl Eq for ZqVector8 {}
 
-impl PartialEq for Zq8
+impl PartialEq for ZqVector8
 {
-    fn eq(&self, rhs: &Zq8) -> bool
+    fn eq(&self, rhs: &ZqVector8) -> bool
     {
         unsafe {
             avx_util::eq(self.data, rhs.data)
@@ -141,7 +141,7 @@ impl PartialEq for Zq8
     }
 }
 
-impl Debug for Zq8
+impl Debug for ZqVector8
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
     {
@@ -150,10 +150,10 @@ impl Debug for Zq8
     }
 }
 
-impl AddAssign<Zq8> for Zq8
+impl AddAssign<ZqVector8> for ZqVector8
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: Zq8)
+    fn add_assign(&mut self, rhs: ZqVector8)
     {
         unsafe {
             let sum = _mm256_add_epi32(self.data, rhs.data);
@@ -163,10 +163,10 @@ impl AddAssign<Zq8> for Zq8
     }
 }
 
-impl SubAssign<Zq8> for Zq8
+impl SubAssign<ZqVector8> for ZqVector8
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: Zq8)
+    fn sub_assign(&mut self, rhs: ZqVector8)
     {
         unsafe {
             let difference = _mm256_sub_epi32(self.data, rhs.data);
@@ -176,10 +176,10 @@ impl SubAssign<Zq8> for Zq8
     }
 }
 
-impl MulAssign<Zq8> for Zq8
+impl MulAssign<ZqVector8> for ZqVector8
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: Zq8)
+    fn mul_assign(&mut self, rhs: ZqVector8)
     {
         unsafe {
             let product: __m256i = _mm256_mullo_epi32(self.data, rhs.data);
@@ -188,13 +188,13 @@ impl MulAssign<Zq8> for Zq8
     }
 }
 
-impl MulAssign<Zq> for Zq8
+impl MulAssign<ZqElement> for ZqVector8
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: Zq)
+    fn mul_assign(&mut self, rhs: ZqElement)
     {
         let factor = unsafe { _mm256_set1_epi32(rhs.representative_pos() as i32) };
-        *self *= Zq8 {
+        *self *= ZqVector8 {
             data: factor
         };
     }
@@ -202,22 +202,22 @@ impl MulAssign<Zq> for Zq8
 
 // We only support to divide the vector by a scalar, since a component-wise vector-vector
 // multiplication is super inefficient with avx.
-impl DivAssign<Zq> for Zq8
+impl DivAssign<ZqElement> for ZqVector8
 {
     #[inline(always)]
-    fn div_assign(&mut self, rhs: Zq)
+    fn div_assign(&mut self, rhs: ZqElement)
     {
         let inverse = ONE / rhs;
         let factor = unsafe { _mm256_set1_epi32(inverse.representative_pos() as i32) };
-        *self *= Zq8 {
+        *self *= ZqVector8 {
             data: factor
         };
     }
 }
 
-impl Neg for Zq8
+impl Neg for ZqVector8
 {
-    type Output = Zq8;
+    type Output = ZqVector8;
 
     #[inline(always)]
     fn neg(mut self) -> Self::Output
@@ -229,36 +229,36 @@ impl Neg for Zq8
     }
 }
 
-impl Add<Zq8> for Zq8
+impl Add<ZqVector8> for ZqVector8
 {
-    type Output = Zq8;
+    type Output = ZqVector8;
 
     #[inline(always)]
-    fn add(mut self, rhs: Zq8) -> Self::Output
+    fn add(mut self, rhs: ZqVector8) -> Self::Output
     {
         self += rhs;
         return self;
     }
 }
 
-impl Sub<Zq8> for Zq8
+impl Sub<ZqVector8> for ZqVector8
 {
-    type Output = Zq8;
+    type Output = ZqVector8;
 
     #[inline(always)]
-    fn sub(mut self, rhs: Zq8) -> Self::Output
+    fn sub(mut self, rhs: ZqVector8) -> Self::Output
     {
         self -= rhs;
         return self;
     }
 }
 
-impl Mul<Zq8> for Zq8
+impl Mul<ZqVector8> for ZqVector8
 {
-    type Output = Zq8;
+    type Output = ZqVector8;
 
     #[inline(always)]
-    fn mul(mut self, rhs: Zq8) -> Self::Output
+    fn mul(mut self, rhs: ZqVector8) -> Self::Output
     {
         self *= rhs;
         return self;
@@ -271,7 +271,7 @@ pub struct CompressedZq8<const D: u16>
     pub data: __m256i
 }
 
-impl Zq8
+impl ZqVector8
 {
 
     pub fn compress<const D: u16>(self) -> CompressedZq8<D>
@@ -294,13 +294,13 @@ impl Zq8
     
     // Returns the element y of Zq for which
     // y.representative_pos() is nearest to 2^d/q * x 
-    pub fn decompress<const D: u16>(x: CompressedZq8<D>) -> Zq8
+    pub fn decompress<const D: u16>(x: CompressedZq8<D>) -> ZqVector8
     {
         unsafe {
             let factor = constant_f32::<{Q as f32 / (1 << D) as f32}>();
             let data_float = _mm256_cvtepi32_ps(x.data);
             let rounded = _mm256_cvtps_epi32(_mm256_mul_ps(data_float, factor));
-            Zq8 {
+            ZqVector8 {
                 data: rounded
             }
         }
@@ -309,17 +309,17 @@ impl Zq8
 
 #[test]
 fn test_from() {
-    let v: Zq8 = Zq8::from([(-3) * 7681, 4 * 7681 + 625, 1, 0, -7680, 2 * 7681 + 3000, -1, 2 * 7681 + 6000]);
-    let w: Zq8 = Zq8::from([0, 625, 1, 0, 1, 3000, 7680, 6000]);
+    let v: ZqVector8 = ZqVector8::from([(-3) * 7681, 4 * 7681 + 625, 1, 0, -7680, 2 * 7681 + 3000, -1, 2 * 7681 + 6000]);
+    let w: ZqVector8 = ZqVector8::from([0, 625, 1, 0, 1, 3000, 7680, 6000]);
     assert_eq!(v, w);
 }
 
 #[test]
 fn test_add_sub() {
-    let mut v: Zq8 = Zq8::from([3567, 132, 6113, 5432, -314, 543, 0, -321]);
-    let w: Zq8 = Zq8::from([-5609, 12, 2386, -2728, -64, 12, -8000, -12]);
-    let sum = Zq8::from([-2042, 144, 818, 2704, -378, 555, -319, -333]);
-    let difference = Zq8::from([1495, 120, 3727, 479, -250, 531, 319, -309]);
+    let mut v: ZqVector8 = ZqVector8::from([3567, 132, 6113, 5432, -314, 543, 0, -321]);
+    let w: ZqVector8 = ZqVector8::from([-5609, 12, 2386, -2728, -64, 12, -8000, -12]);
+    let sum = ZqVector8::from([-2042, 144, 818, 2704, -378, 555, -319, -333]);
+    let difference = ZqVector8::from([1495, 120, 3727, 479, -250, 531, 319, -309]);
     v += w;
     assert_eq!(sum, v);
     v -= w;
@@ -329,9 +329,9 @@ fn test_add_sub() {
 
 #[test]
 fn test_mul() {
-    let mut v: Zq8 = Zq8::from([3567, 132, 6113, 5432, -314, 543, 0, -321]);
-    let w: Zq8 = Zq8::from([-5609, 12, 2386, -2728, -64, 12, -8000, -12]);
-    let expected = Zq8::from([-5979, 1584, 7080, -1847, 4734, 6516, 0, 3852]);
+    let mut v: ZqVector8 = ZqVector8::from([3567, 132, 6113, 5432, -314, 543, 0, -321]);
+    let w: ZqVector8 = ZqVector8::from([-5609, 12, 2386, -2728, -64, 12, -8000, -12]);
+    let expected = ZqVector8::from([-5979, 1584, 7080, -1847, 4734, 6516, 0, 3852]);
     v *= w;
     assert_eq!(expected, v);
 }

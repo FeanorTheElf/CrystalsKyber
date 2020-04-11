@@ -4,21 +4,21 @@ use std::fmt::{ Debug, Display, Formatter };
 use std::convert::From;
 use std::mem::swap;
 
-use super::base64;
+use super::encoding;
 
 macro_rules! zq_arr {
     ($($num:literal),*) => {
-        [$(Zq { value: $num }),*]
+        [$(ZqElement { value: $num }),*]
     };
 }
 
 pub const Q: u32 = 7681;
 
-pub const ZERO: Zq = Zq { value: 0 };
-pub const ONE: Zq = Zq { value: 1 };
+pub const ZERO: ZqElement = ZqElement { value: 0 };
+pub const ONE: ZqElement = ZqElement { value: 1 };
 
 /// All 512-th root of unity
-pub const UNITY_ROOTS_512: [Zq; 512] = zq_arr![
+pub const UNITY_ROOTS_512: [ZqElement; 512] = zq_arr![
     1, 1704, 198, 7109, 799, 1959, 4582, 3832, 878, 5998, 
     4862, 4730, 2551, 7139, 5833, 218, 2784, 4759, 5881, 5200, 4607, 346, 5828, 7060, 1794, 7619, 1886, 
     3086, 4740, 4229, 1438, 113, 527, 7012, 4493, 5796, 6299, 3139, 2880, 7042, 1846, 4055, 4501, 4066, 
@@ -54,7 +54,7 @@ pub const UNITY_ROOTS_512: [Zq; 512] = zq_arr![
 
 /// The inverses of the first 256 512-th roots of unity given by UNITY_ROOTS_512, these are
 /// also 512-th roots of unity
-pub const REV_UNITY_ROOTS_512: [Zq; 256] = zq_arr![
+pub const REV_UNITY_ROOTS_512: [ZqElement; 256] = zq_arr![
     1, 4431, 1125, 7587, 5941, 1784, 1155, 2259, 1286, 6645, 2722, 2012, 5212, 5286, 2897, 1656, 2381, 
     4198, 5637, 6616, 4800, 111, 257, 1979, 4928, 6566, 5999, 5309, 4957, 4488, 219, 2583, 583, 2457, 
     2990, 6646, 7153, 3137, 5118, 3546, 4681, 2811, 4640, 5484, 4601, 1657, 6812, 5323, 5543, 4876, 6584, 
@@ -100,20 +100,20 @@ fn extended_euclidean_algorithm_mod_q(fst: u32, snd: u32) -> (u32, u32)
     return (sa, ta);
 }
 
-// The type of elements of the ring Zq := Z / q*Z
+/// The type of elements of the ring Zq := Z / qZ
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Zq 
+pub struct ZqElement 
 {
     value: u32
 }
 
-impl Zq 
+impl ZqElement 
 {
     // Raises this element to the power of a natural number
-    pub fn pow(self, mut rhs: usize) -> Zq
+    pub fn pow(self, mut rhs: usize) -> ZqElement
     {
-        let mut power: Zq = self;
-        let mut result: Zq = ONE;
+        let mut power: ZqElement = self;
+        let mut result: ZqElement = ONE;
         while rhs != 0 {
             if rhs & 1 == 1 {
                 result *= power;
@@ -140,16 +140,16 @@ impl Zq
         }
     }
 
-    pub fn from_perfect(value: i16) -> Zq
+    pub fn from_perfect(value: i16) -> ZqElement
     {
-        debug_assert!(value >= 0 && (value as u32) < Q);
-        Zq {
+        debug_assert!(value >= 0 && (value as u32) < Q, "Got value {} which is not in range 0..{}", value, Q);
+        ZqElement {
             value: value as u32
         }
     }
 }
 
-impl Debug for Zq 
+impl Debug for ZqElement 
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
@@ -157,7 +157,7 @@ impl Debug for Zq
     }
 }
 
-impl Display for Zq 
+impl Display for ZqElement 
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
@@ -165,71 +165,71 @@ impl Display for Zq
     }
 }
 
-impl Add<Zq> for Zq
+impl Add<ZqElement> for ZqElement
 {
-    type Output = Zq;
+    type Output = ZqElement;
 
     #[inline(always)]
-    fn add(mut self, rhs: Zq) -> Self::Output
+    fn add(mut self, rhs: ZqElement) -> Self::Output
     {
         self += rhs;
         return self;
     }
 }
 
-impl Mul<Zq> for Zq
+impl Mul<ZqElement> for ZqElement
 {
-    type Output = Zq;
+    type Output = ZqElement;
 
     #[inline(always)]
-    fn mul(mut self, rhs: Zq) -> Self::Output
+    fn mul(mut self, rhs: ZqElement) -> Self::Output
     {
         self *= rhs;
         return self;
     }
 }
 
-impl Sub<Zq> for Zq
+impl Sub<ZqElement> for ZqElement
 {
-    type Output = Zq;
+    type Output = ZqElement;
 
     #[inline(always)]
-    fn sub(mut self, rhs: Zq) -> Self::Output
+    fn sub(mut self, rhs: ZqElement) -> Self::Output
     {
         self -= rhs;
         return self;
     }
 }
 
-impl Div<Zq> for Zq
+impl Div<ZqElement> for ZqElement
 {
-    type Output = Zq;
+    type Output = ZqElement;
 
     #[inline(always)]
-    fn div(mut self, rhs: Zq) -> Self::Output
+    fn div(mut self, rhs: ZqElement) -> Self::Output
     {
         self /= rhs;
         return self;
     }
 }
 
-impl Neg for Zq
+impl Neg for ZqElement
 {
-    type Output = Zq;
+    type Output = ZqElement;
 
     #[inline(always)]
     fn neg(self) -> Self::Output
     {
-        Zq {
+        ZqElement {
             value: Q - self.value
         }
     }
 }
 
-impl AddAssign<Zq> for Zq
+impl AddAssign<ZqElement> for ZqElement
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: Zq)
+    fn add_assign(&mut self, rhs: ZqElement)
     {
         self.value = self.value + rhs.value;
         if self.value >= Q {
@@ -238,19 +238,19 @@ impl AddAssign<Zq> for Zq
     }
 }
 
-impl MulAssign<Zq> for Zq
+impl MulAssign<ZqElement> for ZqElement
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: Zq)
+    fn mul_assign(&mut self, rhs: ZqElement)
     {
         self.value = (self.value * rhs.value) % Q;
     }
 }
 
-impl SubAssign<Zq> for Zq
+impl SubAssign<ZqElement> for ZqElement
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: Zq)
+    fn sub_assign(&mut self, rhs: ZqElement)
     {
         self.value = self.value + Q - rhs.value;
         if self.value >= Q {
@@ -259,24 +259,24 @@ impl SubAssign<Zq> for Zq
     }
 }
 
-impl DivAssign<Zq> for Zq
+impl DivAssign<ZqElement> for ZqElement
 {
     #[inline(always)]
-    fn div_assign(&mut self, rhs: Zq)
+    fn div_assign(&mut self, rhs: ZqElement)
     {
         self.value = (self.value * extended_euclidean_algorithm_mod_q(Q, rhs.value).1) % Q;
     }
 }
 
-impl From<i16> for Zq
+impl From<i16> for ZqElement
 {
     // Returns the equivalence class of the argument in Zq
     #[inline(always)]
-    fn from(value: i16) -> Zq
+    fn from(value: i16) -> ZqElement
     {
         // A i16 is positive for sure after adding 5 * Q > 32768
         // and this addition will not overflow as i32
-        Zq {
+        ZqElement {
             value: ((value as i32 + 5 * Q as i32) % Q as i32) as u32 
         }
     }
@@ -288,14 +288,14 @@ pub struct CompressedZq<const D: u16>
     pub data: u16
 }
 
-impl<const D: u16> CompressedZq<D>
+impl<const D: u16> encoding::Encodable for CompressedZq<D>
 {
-    pub fn encode(&self, encoder: &mut base64::Encoder)
+    fn encode<T: encoding::Encoder>(&self, encoder: &mut T)
     {
         encoder.encode_bits(self.data, D as usize);
     }
 
-    pub fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
     {
         Ok(CompressedZq {
             data: data.read_bits(D as usize)?
@@ -311,7 +311,7 @@ impl<const D: u16> Debug for CompressedZq<D>
     }
 }
 
-impl Zq 
+impl ZqElement 
 {
     // Returns the element y in 0, ..., 2^d - 1 such
     // that q/2^n * y is nearest to x.representative_pos()
@@ -329,10 +329,10 @@ impl Zq
     
     // Returns the element y of Zq for which
     // y.representative_pos() is nearest to 2^d/q * x 
-    pub fn decompress<const D: u16>(x: CompressedZq<D>) -> Zq
+    pub fn decompress<const D: u16>(x: CompressedZq<D>) -> ZqElement
     {
         let n = (1 << D) as f32;
-        Zq::from((x.data as f32 * Q as f32 / n).round() as i16)
+        ZqElement::from((x.data as f32 * Q as f32 / n).round() as i16)
     }
 }
 

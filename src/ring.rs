@@ -4,45 +4,45 @@ use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, SubAssign };
 use std::cmp::Eq;
 use std::convert::From;
 
-use super::base64;
+use super::encoding;
 use super::util;
+
+use sha3::digest::XofReader;
 
 ///Degree of the ring extension
 pub const N: usize = 256;
 
-/// Describes types that are algebraic ring extensions of Zq and have a chinese remainder representation, i.e.
-/// the ring extension has degree N and Zq contains N-th roots of unity. Then the ring elements have
-/// a representation in memory as vectors with component-wise addition and multiplication.
-pub trait Ring: Eq + Clone + 
-             for<'a> From<&'a [i16]> +
-             for<'a> Add<&'a Self, Output = Self> + 
-             for<'a> Sub<&'a Self, Output = Self> + 
-             Mul<Zq, Output = Self> +
-             for<'a> AddAssign<&'a Self> + 
-             for<'a> SubAssign<&'a Self> + 
-             MulAssign<Zq>
+/// Elements of the ring Rq := Zq[X] / (X^N + 1)
+pub trait RqElementCoefficientRepr: Eq + Clone + 
+    for<'a> From<&'a [i16]> +
+    for<'a> Add<&'a Self, Output = Self> + 
+    for<'a> Sub<&'a Self, Output = Self> + 
+    Mul<ZqElement, Output = Self> +
+    for<'a> AddAssign<&'a Self> + 
+    for<'a> SubAssign<&'a Self> + 
+    MulAssign<ZqElement>
 {
-    type ChineseRemainderRepr: RingChineseRemainderRepr<CoefficientRepr = Self>;
+    type ChineseRemainderRepr: RqElementChineseRemainderRepr<CoefficientRepr = Self>;
 
-    fn zero() -> Self;
-    fn chinese_remainder_repr(self) -> Self::ChineseRemainderRepr;
-    fn compress<const D : u16>(&self) -> CompressedRq<D>;
-    fn decompress<const D : u16>(x: &CompressedRq<D>) -> Self;
+    fn get_zero() -> Self;
+    fn to_chinese_remainder_repr(self) -> Self::ChineseRemainderRepr;
+    fn compress<const D: u16>(&self) -> CompressedRq<D>;
+    fn decompress<const D: u16>(x: &CompressedRq<D>) -> Self;
 }
 
-pub trait RingChineseRemainderRepr: Eq + Clone + base64::Encodable +
-                        for<'a> Add<&'a Self, Output = Self> + 
-                        for<'a> Sub<&'a Self, Output = Self> + 
-                        for<'a> Mul<&'a Self, Output = Self> + 
-                        for<'a> AddAssign<&'a Self> + 
-                        for<'a> SubAssign<&'a Self> +
-                        for<'a> MulAssign<&'a Self>
+pub trait RqElementChineseRemainderRepr: Eq + Clone + encoding::Encodable +
+    for<'a> Add<&'a Self, Output = Self> + 
+    for<'a> Sub<&'a Self, Output = Self> + 
+    for<'a> Mul<&'a Self, Output = Self> + 
+    for<'a> AddAssign<&'a Self> + 
+    for<'a> SubAssign<&'a Self> +
+    for<'a> MulAssign<&'a Self>
 {
-    type CoefficientRepr: Ring<ChineseRemainderRepr = Self>;
+    type CoefficientRepr: RqElementCoefficientRepr<ChineseRemainderRepr = Self>;
 
-    fn zero() -> Self;
-    fn coefficient_repr(self) -> Self::CoefficientRepr;
-    fn mul_scalar(&mut self, x: Zq);
+    fn get_zero() -> Self;
+    fn to_coefficient_repr(self) -> Self::CoefficientRepr;
+    fn mul_scalar(&mut self, x: ZqElement);
 
     /// More efficient but semantically equivalent to `self += a * b`
     fn add_product(&mut self, a: &Self, b: &Self);
@@ -56,16 +56,16 @@ pub struct CompressedRq<const D: u16>
     pub data: [CompressedZq<D>; N]
 }
 
-impl<const D: u16> base64::Encodable for CompressedRq<D>
+impl<const D: u16> encoding::Encodable for CompressedRq<D>
 {
-    fn encode(&self, encoder: &mut base64::Encoder)
+    fn encode<T: encoding::Encoder>(&self, encoder: &mut T)
     {
         for i in 0..N {
             self.data[i].encode(encoder);
         }
     }
 
-    fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
     {
         Ok(CompressedRq {
             data: util::try_create_array(|_i| CompressedZq::decode(data))?
@@ -88,6 +88,8 @@ impl<const D: u16> std::fmt::Debug for CompressedRq<D>
     }
 }
 
+// The case D = 1 is a special one, as we use this to represent the plaintext.
+// Therefore, we support to convert this from and to a byte array
 impl CompressedRq<1>
 {
     pub fn get_data(&self) -> [u8; 32]

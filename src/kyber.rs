@@ -3,23 +3,23 @@ use super::ref_r;
 use super::avx_r;
 use super::module;
 use super::zq::*;
-use super::ring::*;
 use super::module::*;
+use super::ring::*;
 
 use sha3::digest::{ ExtendableOutput, Input, XofReader };
 
-type Rq = ref_r::Rq;
-type NTTDomainRq = ref_r::NTTDomainRq;
-type Module = module::Module<Rq>;
-type Matrix = module::Matrix<Rq>;
+type RqElement = ref_r::RqElementCoefficientReprImpl;
+type Module = module::RqVector3<RqElement>;
+type Matrix = module::RqSquareMatrix3<RqElement>;
 
-const COMPRESSION_VECTOR: u16 = 11;
-const COMPRESSION_ELEMENT: u16 = 3;
+/// Each public key and ciphertext element is compressed using this count of bits
+const COMPRESSED_VECTOR_BIT_SIZE: u16 = 11;
+const COMPRESSED_RING_ELEMENT_BIT_SIZE: u16 = 3;
 
 pub type Seed = [u8; 32];
-pub type PublicKey = (CompressedModule<COMPRESSION_VECTOR>, Seed);
+pub type PublicKey = (CompressedModule<COMPRESSED_VECTOR_BIT_SIZE>, Seed);
 pub type SecretKey = Module;
-pub type Ciphertext = (CompressedModule<COMPRESSION_VECTOR>, CompressedRq<COMPRESSION_ELEMENT>);
+pub type Ciphertext = (CompressedModule<COMPRESSED_VECTOR_BIT_SIZE>, CompressedRq<COMPRESSED_RING_ELEMENT_BIT_SIZE>);
 pub type Plaintext = [u8; 32];
 
 pub fn encrypt(pk: &PublicKey, plaintext: Plaintext, enc_seed: Seed) -> Ciphertext
@@ -29,18 +29,18 @@ pub fn encrypt(pk: &PublicKey, plaintext: Plaintext, enc_seed: Seed) -> Cipherte
     let mut noise_random = expand_randomness_shake_256(enc_seed);
     let r = sample_error_distribution_vector(&mut noise_random);
     let e1 = sample_error_distribution_vector(&mut noise_random);
-    let e2 = sample_error_distribution_element(&mut noise_random).chinese_remainder_repr();
+    let e2 = sample_error_distribution_element(&mut noise_random).to_chinese_remainder_repr();
     let u = A.transpose() * &r + &e1;
-    let message = Rq::decompress(&CompressedRq::from_data(plaintext));
-    let v = (&t * &r) + &e2 + &message.chinese_remainder_repr(); 
-    return (u.compress(), v.coefficient_repr().compress());
+    let message = RqElement::decompress(&CompressedRq::from_data(plaintext));
+    let v = (&t * &r) + &e2 + &message.to_chinese_remainder_repr(); 
+    return (u.compress(), v.to_coefficient_repr().compress());
 }
 
 pub fn decrypt(sk: &SecretKey, c: Ciphertext) -> Plaintext
 {
     let u = Module::decompress(&c.0);
-    let v = Rq::decompress(&c.1);
-    let m = v - &(sk * &u).coefficient_repr();
+    let v = RqElement::decompress(&c.1);
+    let m = v - &(sk * &u).to_coefficient_repr();
     return m.compress().get_data();
 }
 
@@ -54,7 +54,7 @@ pub fn key_gen(matrix_seed: Seed, secret_seed: Seed) -> (SecretKey, PublicKey)
     return (s, (b.compress(), matrix_seed));
 }
 
-fn sample_uniform_zq<T: XofReader>(mut reader: T) -> impl Iterator<Item = Zq>
+fn sample_uniform_zq<T: XofReader>(mut reader: T) -> impl Iterator<Item = ZqElement>
 {
     let mut buffer: [u8; 2] = [0, 0];
     std::iter::repeat(()).map(move |_| {
@@ -63,7 +63,7 @@ fn sample_uniform_zq<T: XofReader>(mut reader: T) -> impl Iterator<Item = Zq>
             let val: i16 = unsafe { std::mem::transmute::<_, i16>(buffer) } & 0x1FFF;
             debug_assert!(val >= 0);
             if val < Q as i16 {
-                return Zq::from_perfect(val);
+                return ZqElement::from_perfect(val);
             }
         }
     })
@@ -72,21 +72,21 @@ fn sample_uniform_zq<T: XofReader>(mut reader: T) -> impl Iterator<Item = Zq>
 fn sample_uniform_matrix<T: XofReader>(reader: T) -> Matrix
 {
     let mut iter = sample_uniform_zq(reader);
-    let data: [[NTTDomainRq; DIM]; DIM] = util::create_array(|_row| 
+    let matrix_content = util::create_array(|_row| 
         util::create_array(|_col| {
-            Rq::from(util::create_array_it(&mut iter)).chinese_remainder_repr()
+            RqElement::from(util::create_array_it(&mut iter)).to_chinese_remainder_repr()
         })
     );
-    return Matrix::from(data);
+    return Matrix::from(matrix_content);
 }
 
-fn sample_centered_binomial_distribution(random: u8) -> Zq
+fn sample_centered_binomial_distribution(random: u8) -> ZqElement
 {
     let mut value = (random << 4).count_ones() as i16 - (random >> 4).count_ones() as i16;
     if value < 0 {
         value += Q as i16;
     }
-    return Zq::from_perfect(value);
+    return ZqElement::from_perfect(value);
 }
 
 fn sample_error_distribution_vector<T: XofReader>(reader: &mut T) -> Module
@@ -94,16 +94,16 @@ fn sample_error_distribution_vector<T: XofReader>(reader: &mut T) -> Module
     let mut buffer: [u8; N] = [0; N];
     let data = util::create_array(|_| {
         reader.read(&mut buffer);
-        Rq::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i]))).chinese_remainder_repr()
+        RqElement::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i]))).to_chinese_remainder_repr()
     });
     return Module::from(data);
 }
 
-fn sample_error_distribution_element<T: XofReader>(reader: &mut T) -> Rq
+fn sample_error_distribution_element<T: XofReader>(reader: &mut T) -> RqElement
 {
     let mut buffer: [u8; N] = [0; N];
     reader.read(&mut buffer);
-    return Rq::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i])));
+    return RqElement::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i])));
 }
 
 fn expand_randomness_shake_256(seed: Seed) -> sha3::Sha3XofReader
@@ -128,7 +128,7 @@ const TEST_MESSAGE: Plaintext = [
 ];
 
 #[bench]
-fn bench_all(bencher: &mut test::Bencher) {
+fn benchmark_all(bencher: &mut test::Bencher) {
     bencher.iter(|| {
         let mut matrix_seed = [0; 32];
         matrix_seed[0] = 1;
@@ -147,7 +147,7 @@ fn bench_all(bencher: &mut test::Bencher) {
 }
 
 #[bench]
-fn bench_key_generation(bencher: &mut test::Bencher) {
+fn benchmark_key_generation(bencher: &mut test::Bencher) {
     let mut matrix_seed = [0; 32];
     matrix_seed[0] = 1;
     let mut secret_seed = [0; 32];
@@ -159,7 +159,7 @@ fn bench_key_generation(bencher: &mut test::Bencher) {
 }
 
 #[bench]
-fn bench_encryption(bencher: &mut test::Bencher) {
+fn benchmark_encryption(bencher: &mut test::Bencher) {
     let mut matrix_seed = [0; 32];
     matrix_seed[0] = 1;
     let mut secret_seed = [0; 32];
@@ -174,7 +174,7 @@ fn bench_encryption(bencher: &mut test::Bencher) {
 }
 
 #[bench]
-fn bench_decryption(bencher: &mut test::Bencher) {
+fn benchmark_decryption(bencher: &mut test::Bencher) {
     let mut matrix_seed = [0; 32];
     matrix_seed[0] = 1;
     let mut secret_seed = [0; 32];

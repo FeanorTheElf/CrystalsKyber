@@ -1,8 +1,8 @@
 use super::zq::*;
 use super::ring::*;
 use super::util;
-use super::base64;
-use super::base64::Encodable;
+use super::encoding;
+use super::encoding::Encodable;
 
 use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, SubAssign };
 use std::convert::From;
@@ -14,70 +14,70 @@ pub const DIM: usize = 3;
 /// R is given as a generic parameter, this type is used for both the reference
 /// and the avx implementation.
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct Module<R: Ring>
+pub struct RqVector3<R: RqElementCoefficientRepr>
 {
     data: [R::ChineseRemainderRepr; DIM]
 }
 
-impl<R: Ring> Module<R>
+impl<R: RqElementCoefficientRepr> encoding::Encodable for RqVector3<R>
 {
-    pub fn encode(&self, encoder: &mut base64::Encoder)
+    fn encode<T: encoding::Encoder>(&self, encoder: &mut T)
     {
         for element in &self.data {
             element.encode(encoder);
         }
     }
 
-    pub fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
     {
-        Ok(Module {
+        Ok(RqVector3 {
             data: util::try_create_array(|_i| R::ChineseRemainderRepr::decode(data))?
         })
     }
 }
 
-impl<'a, R: Ring> Add<&'a Module<R>> for Module<R>
+impl<'a, R: RqElementCoefficientRepr> Add<&'a RqVector3<R>> for RqVector3<R>
 {
-    type Output = Module<R>;
+    type Output = RqVector3<R>;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a Module<R>) -> Module<R>
+    fn add(mut self, rhs: &'a RqVector3<R>) -> RqVector3<R>
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a, R: Ring> Add<Module<R>> for &'a Module<R>
+impl<'a, R: RqElementCoefficientRepr> Add<RqVector3<R>> for &'a RqVector3<R>
 {
-    type Output = Module<R>;
+    type Output = RqVector3<R>;
 
     #[inline(always)]
-    fn add(self, mut rhs: Module<R>) -> Module<R>
+    fn add(self, mut rhs: RqVector3<R>) -> RqVector3<R>
     {
         rhs += self;
         return rhs;
     }
 }
 
-impl<'a, R: Ring> Sub<&'a Module<R>> for Module<R>
+impl<'a, R: RqElementCoefficientRepr> Sub<&'a RqVector3<R>> for RqVector3<R>
 {
-    type Output = Module<R>;
+    type Output = RqVector3<R>;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a Module<R>) -> Module<R>
+    fn sub(mut self, rhs: &'a RqVector3<R>) -> RqVector3<R>
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a, R: Ring> Sub<Module<R>> for &'a Module<R>
+impl<'a, R: RqElementCoefficientRepr> Sub<RqVector3<R>> for &'a RqVector3<R>
 {
-    type Output = Module<R>;
+    type Output = RqVector3<R>;
 
     #[inline(always)]
-    fn sub(self, mut rhs: Module<R>) -> Module<R>
+    fn sub(self, mut rhs: RqVector3<R>) -> RqVector3<R>
     {
         rhs -= self;
         rhs *= -ONE;
@@ -85,14 +85,14 @@ impl<'a, R: Ring> Sub<Module<R>> for &'a Module<R>
     }
 }
 
-impl<'a, R: Ring> Mul<&'a Module<R>> for &'a Module<R>
+impl<'a, R: RqElementCoefficientRepr> Mul<&'a RqVector3<R>> for &'a RqVector3<R>
 {
     type Output = R::ChineseRemainderRepr;
 
     #[inline(always)]
-    fn mul(self, rhs: &'a Module<R>) -> R::ChineseRemainderRepr
+    fn mul(self, rhs: &'a RqVector3<R>) -> R::ChineseRemainderRepr
     {
-        let mut result = R::ChineseRemainderRepr::zero();
+        let mut result = R::ChineseRemainderRepr::get_zero();
         for i in 0..DIM {
             result.add_product(&self.data[i], &rhs.data[i]);
         }
@@ -100,22 +100,22 @@ impl<'a, R: Ring> Mul<&'a Module<R>> for &'a Module<R>
     }
 }
 
-impl<'a, R: Ring> Mul<&'a R::ChineseRemainderRepr> for Module<R>
+impl<'a, R: RqElementCoefficientRepr> Mul<&'a R::ChineseRemainderRepr> for RqVector3<R>
 {
-    type Output = Module<R>;
+    type Output = RqVector3<R>;
 
     #[inline(always)]
-    fn mul(mut self, rhs: &'a R::ChineseRemainderRepr) -> Module<R>
+    fn mul(mut self, rhs: &'a R::ChineseRemainderRepr) -> RqVector3<R>
     {
         self *= rhs;
         return self;
     }
 }
 
-impl<'a, R: Ring> AddAssign<&'a Module<R>> for Module<R>
+impl<'a, R: RqElementCoefficientRepr> AddAssign<&'a RqVector3<R>> for RqVector3<R>
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a Module<R>) 
+    fn add_assign(&mut self, rhs: &'a RqVector3<R>) 
     {
         for i in 0..DIM {
             self.data[i] += &rhs.data[i];
@@ -123,10 +123,10 @@ impl<'a, R: Ring> AddAssign<&'a Module<R>> for Module<R>
     }
 }
 
-impl<'a, R: Ring> SubAssign<&'a Module<R>> for Module<R>
+impl<'a, R: RqElementCoefficientRepr> SubAssign<&'a RqVector3<R>> for RqVector3<R>
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a Module<R>) 
+    fn sub_assign(&mut self, rhs: &'a RqVector3<R>) 
     {
         for i in 0..DIM {
             self.data[i] -= &rhs.data[i];
@@ -134,7 +134,7 @@ impl<'a, R: Ring> SubAssign<&'a Module<R>> for Module<R>
     }
 }
 
-impl<'a, R: Ring> MulAssign<&'a R::ChineseRemainderRepr> for Module<R>
+impl<'a, R: RqElementCoefficientRepr> MulAssign<&'a R::ChineseRemainderRepr> for RqVector3<R>
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: &'a R::ChineseRemainderRepr) 
@@ -145,10 +145,10 @@ impl<'a, R: Ring> MulAssign<&'a R::ChineseRemainderRepr> for Module<R>
     }
 }
 
-impl<R: Ring> MulAssign<Zq> for Module<R>
+impl<R: RqElementCoefficientRepr> MulAssign<ZqElement> for RqVector3<R>
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: Zq) 
+    fn mul_assign(&mut self, rhs: ZqElement) 
     {
         for i in 0..DIM {
             self.data[i].mul_scalar(rhs);
@@ -156,42 +156,35 @@ impl<R: Ring> MulAssign<Zq> for Module<R>
     }
 }
 
-impl<'a, R: Ring> From<&'a [R::ChineseRemainderRepr]> for Module<R>
+impl<'a, R: RqElementCoefficientRepr> From<&'a [R::ChineseRemainderRepr]> for RqVector3<R>
 {
     #[inline(always)]
-    fn from(data: &'a [R::ChineseRemainderRepr]) -> Module<R>
+    fn from(data: &'a [R::ChineseRemainderRepr]) -> RqVector3<R>
     {
         assert_eq!(DIM, data.len());
         Self::from(util::create_array(|i| data[i].clone()))
     }
 }
 
-impl<R: Ring> From<[R::ChineseRemainderRepr; DIM]> for Module<R>
+impl<R: RqElementCoefficientRepr> From<[R::ChineseRemainderRepr; DIM]> for RqVector3<R>
 {
     #[inline(always)]
-    fn from(data: [R::ChineseRemainderRepr; DIM]) -> Module<R>
+    fn from(data: [R::ChineseRemainderRepr; DIM]) -> RqVector3<R>
     {
-        Module {
+        RqVector3 {
             data: data
         }
     }
 }
 
-/// A dxd matrix over the given ring R, where d = DIM = 3.
+/// A dxd matrix over the given RqElementCoefficientRepr R, where d = DIM = 3.
 #[derive(PartialEq, Eq, Clone)]
-pub struct Matrix<R: Ring>
+pub struct RqSquareMatrix3<R: RqElementCoefficientRepr>
 {
-    rows: [Module<R>; DIM]
+    rows: [RqVector3<R>; DIM]
 }
 
-/// A reference onto the transpose of a dxd matrix over the ring R.
-#[derive(PartialEq, Eq, Clone)]
-pub struct TransposedMat<'a, R: Ring>
-{
-    data: &'a Matrix<R>
-}
-
-impl<R: Ring> Matrix<R>
+impl<R: RqElementCoefficientRepr> RqSquareMatrix3<R>
 {
     pub fn transpose<'a>(&'a self) -> TransposedMat<'a, R>
     {
@@ -201,55 +194,62 @@ impl<R: Ring> Matrix<R>
     }
 }
 
-impl<'a, R: Ring> TransposedMat<'a, R>
+impl<'a, R: RqElementCoefficientRepr> Mul<&'a RqVector3<R>> for &'a RqSquareMatrix3<R>
 {
-    pub fn transpose(&'a self) -> &'a Matrix<R>
-    {
-        self.data
-    }
-}
-
-impl<'a, R: Ring> Mul<&'a Module<R>> for &'a Matrix<R>
-{
-    type Output = Module<R>;
+    type Output = RqVector3<R>;
 
     #[inline(always)]
-    fn mul(self, rhs: &'a Module<R>) -> Module<R> 
+    fn mul(self, rhs: &'a RqVector3<R>) -> RqVector3<R> 
     {
-        Module {
+        RqVector3 {
             data: [&self.rows[0] * rhs, &self.rows[1] * rhs, &self.rows[2] * rhs]
         }
     }
 }
 
-impl<'a, R: Ring> Mul<&'a Module<R>> for TransposedMat<'a, R>
+impl<R: RqElementCoefficientRepr> From<[[R::ChineseRemainderRepr; DIM]; DIM]> for RqSquareMatrix3<R>
 {
-    type Output = Module<R>;
+    #[inline(always)]
+    fn from(data: [[R::ChineseRemainderRepr; DIM]; DIM]) -> RqSquareMatrix3<R>
+    {
+        let [fst, snd, trd] = data;
+        RqSquareMatrix3 {
+            rows: [RqVector3::from(fst), RqVector3::from(snd), RqVector3::from(trd)]
+        }
+    }
+}
+
+/// A reference onto the transpose of a dxd matrix over the RqElementCoefficientRepr R.
+#[derive(PartialEq, Eq, Clone)]
+pub struct TransposedMat<'a, R: RqElementCoefficientRepr>
+{
+    data: &'a RqSquareMatrix3<R>
+}
+
+impl<'a, R: RqElementCoefficientRepr> TransposedMat<'a, R>
+{
+    pub fn transpose(&'a self) -> &'a RqSquareMatrix3<R>
+    {
+        self.data
+    }
+}
+
+impl<'a, R: RqElementCoefficientRepr> Mul<&'a RqVector3<R>> for TransposedMat<'a, R>
+{
+    type Output = RqVector3<R>;
 
     #[inline(always)]
-    fn mul(self, rhs: &'a Module<R>) -> Module<R>
+    fn mul(self, rhs: &'a RqVector3<R>) -> RqVector3<R>
     {
-        let mut result: [R::ChineseRemainderRepr; DIM] = util::create_array(|_i| R::ChineseRemainderRepr::zero());
+        let mut result: [R::ChineseRemainderRepr; DIM] = util::create_array(|_i| R::ChineseRemainderRepr::get_zero());
         for row in 0..DIM {
             for col in 0..DIM {
                 result[row].add_product(&self.data.rows[col].data[row], &rhs.data[col]);
             }
         }
-        return Module {
+        return RqVector3 {
             data: result
         };
-    }
-}
-
-impl<R: Ring> From<[[R::ChineseRemainderRepr; DIM]; DIM]> for Matrix<R>
-{
-    #[inline(always)]
-    fn from(data: [[R::ChineseRemainderRepr; DIM]; DIM]) -> Matrix<R>
-    {
-        let [fst, snd, trd] = data;
-        Matrix {
-            rows: [Module::from(fst), Module::from(snd), Module::from(trd)]
-        }
     }
 }
 
@@ -259,16 +259,16 @@ pub struct CompressedModule<const D: u16>
     data: [CompressedRq<D>; DIM]
 }
 
-impl<const D: u16> base64::Encodable for CompressedModule<D>
+impl<const D: u16> encoding::Encodable for CompressedModule<D>
 {
-    fn encode(&self, encoder: &mut base64::Encoder)
+    fn encode<T: encoding::Encoder>(&self, encoder: &mut T)
     {
         for element in &self.data {
             element.encode(encoder);
         }
     }
 
-    fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
     {
         Ok(CompressedModule {
             data: util::try_create_array(|_i| CompressedRq::decode(data))?
@@ -276,24 +276,24 @@ impl<const D: u16> base64::Encodable for CompressedModule<D>
     }
 }
 
-impl<T: Ring> Module<T>
+impl<T: RqElementCoefficientRepr> RqVector3<T>
 {
     pub fn compress<const D: u16>(self) -> CompressedModule<D>
     {
         let [fst, snd, trd] = self.data;
         CompressedModule {
-            data: [RingChineseRemainderRepr::coefficient_repr(fst).compress(), 
-                RingChineseRemainderRepr::coefficient_repr(snd).compress(), 
-                RingChineseRemainderRepr::coefficient_repr(trd).compress()]
+            data: [RqElementChineseRemainderRepr::to_coefficient_repr(fst).compress(), 
+                RqElementChineseRemainderRepr::to_coefficient_repr(snd).compress(), 
+                RqElementChineseRemainderRepr::to_coefficient_repr(trd).compress()]
         }
     }
 
-    pub fn decompress<const D: u16>(x: &CompressedModule<D>) -> Module<T>
+    pub fn decompress<const D: u16>(x: &CompressedModule<D>) -> RqVector3<T>
     {
-        Module {
-            data: [T::chinese_remainder_repr(T::decompress(&x.data[0])),
-                T::chinese_remainder_repr(T::decompress(&x.data[1])), 
-                T::chinese_remainder_repr(T::decompress(&x.data[2]))]
+        RqVector3 {
+            data: [T::to_chinese_remainder_repr(T::decompress(&x.data[0])),
+                T::to_chinese_remainder_repr(T::decompress(&x.data[1])), 
+                T::to_chinese_remainder_repr(T::decompress(&x.data[2]))]
         }
     }
 }

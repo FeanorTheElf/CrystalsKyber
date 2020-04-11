@@ -2,72 +2,71 @@ use super::zq::*;
 use super::ring::*;
 
 use super::util;
-use super::base64;
+use super::encoding;
 
 use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, SubAssign };
 use std::cmp::{ PartialEq, Eq };
 use std::convert::From;
 use std::fmt::{ Formatter, Debug };
 
-/// The ring Rq := Zq[X] / (X^N + 1).
 #[derive(Clone)]
-pub struct Rq
+pub struct RqElementCoefficientReprImpl
 {
-    data: [Zq; N]
+    data: [ZqElement; N]
 }
 
-impl PartialEq for Rq
+impl PartialEq for RqElementCoefficientReprImpl
 {
-    fn eq(&self, rhs: &Rq) -> bool
+    fn eq(&self, rhs: &RqElementCoefficientReprImpl) -> bool
     {
         (0..N).all(|i| self.data[i] == rhs.data[i])
     }
 }
 
-impl Eq for Rq {}
+impl Eq for RqElementCoefficientReprImpl {}
 
-impl<'a> Add<&'a Rq> for Rq
+impl<'a> Add<&'a RqElementCoefficientReprImpl> for RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a Rq) -> Rq
+    fn add(mut self, rhs: &'a RqElementCoefficientReprImpl) -> RqElementCoefficientReprImpl
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a> Add<Rq> for &'a Rq
+impl<'a> Add<RqElementCoefficientReprImpl> for &'a RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
 
     #[inline(always)]
-    fn add(self, mut rhs: Rq) -> Rq
+    fn add(self, mut rhs: RqElementCoefficientReprImpl) -> RqElementCoefficientReprImpl
     {
         rhs += self;
         return rhs;
     }
 }
 
-impl<'a> Sub<&'a Rq> for Rq
+impl<'a> Sub<&'a RqElementCoefficientReprImpl> for RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a Rq) -> Self::Output
+    fn sub(mut self, rhs: &'a RqElementCoefficientReprImpl) -> Self::Output
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a> Sub<Rq> for &'a Rq
+impl<'a> Sub<RqElementCoefficientReprImpl> for &'a RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
 
     #[inline(always)]
-    fn sub(self, mut rhs: Rq) -> Self::Output
+    fn sub(self, mut rhs: RqElementCoefficientReprImpl) -> Self::Output
     {
         rhs -= self;
         rhs *= -ONE;
@@ -75,22 +74,22 @@ impl<'a> Sub<Rq> for &'a Rq
     }
 }
 
-impl Mul<Zq> for Rq
+impl Mul<ZqElement> for RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
 
     #[inline(always)]
-    fn mul(mut self, rhs: Zq) -> Self::Output
+    fn mul(mut self, rhs: ZqElement) -> Self::Output
     {
         self *= rhs;
         return self;
     }
 }
 
-impl<'a> AddAssign<&'a Rq> for Rq
+impl<'a> AddAssign<&'a RqElementCoefficientReprImpl> for RqElementCoefficientReprImpl
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a Rq)
+    fn add_assign(&mut self, rhs: &'a RqElementCoefficientReprImpl)
     {
         for i in 0..N {
             self.data[i] += rhs.data[i];
@@ -98,10 +97,10 @@ impl<'a> AddAssign<&'a Rq> for Rq
     }
 }
 
-impl<'a> SubAssign<&'a Rq> for Rq
+impl<'a> SubAssign<&'a RqElementCoefficientReprImpl> for RqElementCoefficientReprImpl
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a Rq)
+    fn sub_assign(&mut self, rhs: &'a RqElementCoefficientReprImpl)
     {
         for i in 0..N {
             self.data[i] -= rhs.data[i];
@@ -109,10 +108,10 @@ impl<'a> SubAssign<&'a Rq> for Rq
     }
 }
 
-impl MulAssign<Zq> for Rq
+impl MulAssign<ZqElement> for RqElementCoefficientReprImpl
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: Zq)
+    fn mul_assign(&mut self, rhs: ZqElement)
     {
         for i in 0..N {
             self.data[i] *= rhs;
@@ -120,32 +119,32 @@ impl MulAssign<Zq> for Rq
     }
 }
 
-impl<'a> From<&'a [i16]> for Rq
+impl<'a> From<&'a [i16]> for RqElementCoefficientReprImpl
 {
-    fn from(value: &'a [i16]) -> Rq {
+    fn from(value: &'a [i16]) -> RqElementCoefficientReprImpl {
         assert_eq!(N, value.len());
-        let mut data: [Zq; N] = [ZERO; N];
+        let mut data: [ZqElement; N] = [ZERO; N];
         for i in 0..N {
-            data[i] = Zq::from(value[i]);
+            data[i] = ZqElement::from(value[i]);
         }
-        return Rq {
+        return RqElementCoefficientReprImpl {
             data: data
         };
     }
 }
 
-impl From<[Zq; N]> for Rq
+impl From<[ZqElement; N]> for RqElementCoefficientReprImpl
 {
     #[inline(always)]
-    fn from(data: [Zq; N]) -> Rq
+    fn from(data: [ZqElement; N]) -> RqElementCoefficientReprImpl
     {
-        Rq {
+        RqElementCoefficientReprImpl {
             data: data
         }
     }
 }
 
-impl Debug for Rq
+impl Debug for RqElementCoefficientReprImpl
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
@@ -156,21 +155,32 @@ impl Debug for Rq
     }
 }
 
-impl Ring for Rq
+impl RqElementCoefficientRepr for RqElementCoefficientReprImpl
 {
-    type ChineseRemainderRepr = NTTDomainRq;
+    type ChineseRemainderRepr = RqElementChineseRemainderReprImpl;
 
-    fn zero() -> Rq
+    fn get_zero() -> RqElementCoefficientReprImpl
     {
-        return Rq {
+        return RqElementCoefficientReprImpl {
             data: [ZERO; N]
         }
     }
 
-    fn chinese_remainder_repr(self) -> NTTDomainRq 
+    fn to_chinese_remainder_repr(mut self) -> RqElementChineseRemainderReprImpl
     {
-        NTTDomainRq::chinese_remainder_repr(self)
+        // we do not need the exact fourier transformation (i.e. the evaluation at
+        // all 256-th roots of unity), but the evaluation at all primitive 512-th
+        // roots of unity. Since the primitive 512-th roots of unity are exactly
+        // the 256-th roots of unity multiplied with any primitive root of unity,
+        // this approach lets us calculate the correct result
+        for i in 0..N {
+            self.data[i] *= UNITY_ROOTS_512[i]
+        }
+        RqElementChineseRemainderReprImpl {
+            values: RqElementChineseRemainderReprImpl::fft(self.data, |i| UNITY_ROOTS_512[2 * i])
+        }
     }
+
     
     fn compress<const D: u16>(&self) -> CompressedRq<D>
     {
@@ -183,13 +193,13 @@ impl Ring for Rq
         };
     }
 
-    fn decompress<const D: u16>(x: &CompressedRq<D>) -> Rq
+    fn decompress<const D: u16>(x: &CompressedRq<D>) -> RqElementCoefficientReprImpl
     {
         let mut data = [ZERO; N];
         for i in 0..N {
-            data[i] = Zq::decompress(x.data[i]);
+            data[i] = ZqElement::decompress(x.data[i]);
         }
-        return Rq {
+        return RqElementCoefficientReprImpl {
             data: data
         };
     }
@@ -199,16 +209,16 @@ impl Ring for Rq
 /// the values of the polynomial at each root of unity
 /// in Zq
 #[derive(Clone)]
-pub struct NTTDomainRq
+pub struct RqElementChineseRemainderReprImpl
 {
-    values: [Zq; N]
+    values: [ZqElement; N]
 }
 
-impl NTTDomainRq
+impl RqElementChineseRemainderReprImpl
 {
     #[inline(never)]
-    fn fft<F>(mut values: [Zq; N], unity_root: F) -> [Zq; N]
-        where F: Fn(usize) -> Zq
+    fn fft<F>(mut values: [ZqElement; N], unity_root: F) -> [ZqElement; N]
+        where F: Fn(usize) -> ZqElement
     {
         // Use the Cooley–Tukey FFT algorithm (N = N):
         // for i from 1 to log(N) do:
@@ -216,12 +226,9 @@ impl NTTDomainRq
         //   Calculate the DFT of [x_j, x_j+d, x_j+2d, ..., x_j+(n-1)d]
         //   for each j in 0..d and each k in 0..n where d=N/n
         //   using only the DFTs from the last iteration
-        // During each loop, values and temp will hold
-        // the DFTs of this and the last loop (they change
-        // the roles each iteration)
-        // Both contain the value:
-        //   values[k * d + j] is the DFT with j and k
-        let mut temp: [Zq; N] = [ZERO; N];
+        // During each loop, values and temp will hold the DFTs of this and the last loop (they change the roles each iteration)
+        // Both contain the value: values[k * d + j] is the DFT with j and k
+        let mut temp: [ZqElement; N] = [ZERO; N];
 
         // values already contain the k=1 DFT of [x_j], so start with i = 7
         let mut n: usize = 1;
@@ -272,124 +279,109 @@ impl NTTDomainRq
         return values;
     }
 
-    fn chinese_remainder_repr(mut r: Rq) -> NTTDomainRq
+    fn coefficient_repr(ntt_repr: RqElementChineseRemainderReprImpl) -> RqElementCoefficientReprImpl
     {
-        // we do not need the exact fourier transformation (i.e. the evaluation at
-        // all 256-th roots of unity), but the evaluation at all primitive 512-th
-        // roots of unity. Since the primitive 512-th roots of unity are exactly
-        // the 256-th roots of unity multiplied with any primitive root of unity,
-        // this approach lets us calculate the correct result
-        for i in 0..N {
-            r.data[i] *= UNITY_ROOTS_512[i]
-        }
-        NTTDomainRq {
-            values: Self::fft(r.data, |i| UNITY_ROOTS_512[2 * i])
-        }
-    }
-
-    fn coefficient_repr(ntt_repr: NTTDomainRq) -> Rq
-    {
-        let inv_n: Zq = ONE / Zq::from(N as i16);
+        let inv_n: ZqElement = ONE / ZqElement::from(N as i16);
         let mut result = Self::fft(ntt_repr.values, |i| UNITY_ROOTS_512[2 * ((N - i) % 256)]);
         for i in 0..N {
             // see dft for why this is necessary (we do not do a real fourier transformation)
             result[i] *= REV_UNITY_ROOTS_512[i];
             result[i] *= inv_n;
         }
-        return Rq {
+        return RqElementCoefficientReprImpl {
             data: result
         };
     }
 }
 
-impl PartialEq for NTTDomainRq
+impl PartialEq for RqElementChineseRemainderReprImpl
 {
-    fn eq(&self, rhs: &NTTDomainRq) -> bool
+    fn eq(&self, rhs: &RqElementChineseRemainderReprImpl) -> bool
     {
         (0..N).all(|i| self.values[i] == rhs.values[i])
     }
 }
 
-impl Eq for NTTDomainRq {}
+impl Eq for RqElementChineseRemainderReprImpl {}
 
-impl<'a> Add<&'a NTTDomainRq> for NTTDomainRq
+impl<'a> Add<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
-    type Output = NTTDomainRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a NTTDomainRq) -> Self::Output
+    fn add(mut self, rhs: &'a RqElementChineseRemainderReprImpl) -> Self::Output
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a> Add<NTTDomainRq> for &'a NTTDomainRq
+impl<'a> Add<RqElementChineseRemainderReprImpl> for &'a RqElementChineseRemainderReprImpl
 {
-    type Output = NTTDomainRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn add(self, mut rhs: NTTDomainRq) -> Self::Output
+    fn add(self, mut rhs: RqElementChineseRemainderReprImpl) -> Self::Output
     {
         rhs += self;
         return rhs;
     }
 }
 
-impl<'a> Mul<&'a NTTDomainRq> for NTTDomainRq
+impl<'a> Mul<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
-    type Output = NTTDomainRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn mul(mut self, rhs: &'a NTTDomainRq) -> Self::Output
+    fn mul(mut self, rhs: &'a RqElementChineseRemainderReprImpl) -> Self::Output
     {
         self *= rhs;
         return self;
     }
 }
 
-impl<'a> Mul<NTTDomainRq> for &'a NTTDomainRq
+impl<'a> Mul<RqElementChineseRemainderReprImpl> for &'a RqElementChineseRemainderReprImpl
 {
-    type Output = NTTDomainRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn mul(self, mut rhs: NTTDomainRq) -> Self::Output
+    fn mul(self, mut rhs: RqElementChineseRemainderReprImpl) -> Self::Output
     {
         rhs *= self;
         return rhs;
     }
 }
 
-impl Mul<Zq> for NTTDomainRq
+impl Mul<ZqElement> for RqElementChineseRemainderReprImpl
 {
-    type Output = NTTDomainRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn mul(mut self, rhs: Zq) -> Self::Output
+    fn mul(mut self, rhs: ZqElement) -> Self::Output
     {
         self *= rhs;
         return self;
     }
 }
 
-impl<'a> Sub<&'a NTTDomainRq> for NTTDomainRq
+impl<'a> Sub<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
-    type Output = NTTDomainRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a NTTDomainRq) -> Self::Output
+    fn sub(mut self, rhs: &'a RqElementChineseRemainderReprImpl) -> Self::Output
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a> Sub<NTTDomainRq> for &'a NTTDomainRq
+impl<'a> Sub<RqElementChineseRemainderReprImpl> for &'a RqElementChineseRemainderReprImpl
 {
-    type Output = NTTDomainRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn sub(self, mut rhs: NTTDomainRq) -> Self::Output
+    fn sub(self, mut rhs: RqElementChineseRemainderReprImpl) -> Self::Output
     {
         rhs -= self;
         rhs *= ZERO - ONE;
@@ -397,61 +389,61 @@ impl<'a> Sub<NTTDomainRq> for &'a NTTDomainRq
     }
 }
 
-impl<'a> AddAssign<&'a NTTDomainRq> for NTTDomainRq
+impl<'a> AddAssign<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a NTTDomainRq) {
+    fn add_assign(&mut self, rhs: &'a RqElementChineseRemainderReprImpl) {
         for i in 0..N {
             self.values[i] += rhs.values[i];
         }
     }
 }
 
-impl<'a> SubAssign<&'a NTTDomainRq> for NTTDomainRq
+impl<'a> SubAssign<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a NTTDomainRq) {
+    fn sub_assign(&mut self, rhs: &'a RqElementChineseRemainderReprImpl) {
         for i in 0..N {
             self.values[i] -= rhs.values[i];
         }
     }
 }
 
-impl<'a> MulAssign<&'a NTTDomainRq> for NTTDomainRq
+impl<'a> MulAssign<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: &'a NTTDomainRq) {
+    fn mul_assign(&mut self, rhs: &'a RqElementChineseRemainderReprImpl) {
         for i in 0..N {
             self.values[i] *= rhs.values[i];
         }
     }
 }
 
-impl MulAssign<Zq> for NTTDomainRq
+impl MulAssign<ZqElement> for RqElementChineseRemainderReprImpl
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: Zq) {
+    fn mul_assign(&mut self, rhs: ZqElement) {
         for i in 0..N {
             self.values[i] *= rhs;
         }
     }
 }
 
-impl<'a> From<&'a [i16]> for NTTDomainRq
+impl<'a> From<&'a [i16]> for RqElementChineseRemainderReprImpl
 {
-    fn from(value: &'a [i16]) -> NTTDomainRq {
+    fn from(value: &'a [i16]) -> RqElementChineseRemainderReprImpl {
         assert_eq!(N, value.len());
-        let mut values: [Zq; N] = [ZERO; N];
+        let mut values: [ZqElement; N] = [ZERO; N];
         for i in 0..N {
-            values[i] = Zq::from(value[i]);
+            values[i] = ZqElement::from(value[i]);
         }
-        return NTTDomainRq {
+        return RqElementChineseRemainderReprImpl {
             values: values
         };
     }
 }
 
-impl Debug for NTTDomainRq
+impl Debug for RqElementChineseRemainderReprImpl
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
@@ -462,45 +454,52 @@ impl Debug for NTTDomainRq
     }
 }
 
-impl base64::Encodable for NTTDomainRq
+// The count of bits we write when encoding an element of Zq 
+const ENCODE_ENTRY_BITS: usize = 13;
+
+impl encoding::Encodable for RqElementChineseRemainderReprImpl
 {
-    fn encode(&self, encoder: &mut base64::Encoder)
+    fn encode<T: encoding::Encoder>(&self, encoder: &mut T)
     {
         for i in 0..N {
-            encoder.encode_bits(self.values[i].representative_pos() as u16, 16);
+            encoder.encode_bits(self.values[i].representative_pos() as u16, ENCODE_ENTRY_BITS);
         }
     }
 
-    fn decode(data: &mut base64::Decoder) -> base64::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
     {
-        Ok(NTTDomainRq {
-            values: util::try_create_array(|_i| Ok(Zq::from_perfect(data.read_bits(16)? as i16)))?
+        Ok(RqElementChineseRemainderReprImpl {
+            values: util::try_create_array(|_i| {
+                let data_bits = data.read_bits(ENCODE_ENTRY_BITS)?;
+                println!("{}", data_bits);
+                Ok(ZqElement::from_perfect(data_bits as i16))
+            })?
         })
     }
 }
 
-impl RingChineseRemainderRepr for NTTDomainRq
+impl RqElementChineseRemainderRepr for RqElementChineseRemainderReprImpl
 {
-    type CoefficientRepr = Rq;
+    type CoefficientRepr = RqElementCoefficientReprImpl;
 
-    fn zero() -> NTTDomainRq
+    fn get_zero() -> RqElementChineseRemainderReprImpl
     {
-        return NTTDomainRq {
+        return RqElementChineseRemainderReprImpl {
             values: [ZERO; N]
         }
     }
 
-    fn coefficient_repr(self) -> Rq 
+    fn to_coefficient_repr(self) -> RqElementCoefficientReprImpl 
     {
-        NTTDomainRq::coefficient_repr(self)
+        RqElementChineseRemainderReprImpl::coefficient_repr(self)
     }
 
-    fn mul_scalar(&mut self, x: Zq)
+    fn mul_scalar(&mut self, x: ZqElement)
     {
         *self *= x;
     }
 
-    fn add_product(&mut self, a: &NTTDomainRq, b: &NTTDomainRq)
+    fn add_product(&mut self, a: &RqElementChineseRemainderReprImpl, b: &RqElementChineseRemainderReprImpl)
     {
         for i in 0..N {
             self.values[i] += a.values[i] * b.values[i];
@@ -530,51 +529,51 @@ const ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663,
 
 #[bench]
 fn bench_ntt(bencher: &mut test::Bencher) {
-    let element = Rq::from(&ELEMENT[..]);
+    let element = RqElementCoefficientReprImpl::from(&ELEMENT[..]);
     bencher.iter(|| {
-        let ntt_repr = element.clone().chinese_remainder_repr();
-        assert_eq!(element, ntt_repr.coefficient_repr());
+        let ntt_repr = element.clone().to_chinese_remainder_repr();
+        assert_eq!(element, ntt_repr.to_coefficient_repr());
     });
 }
 
 #[test]
 fn test_mul() {
-    let mut data: [Zq; 256] = [ZERO; 256];
+    let mut data: [ZqElement; 256] = [ZERO; 256];
     data[128] = ONE;
-    let element = Rq::from(data);
-    let ntt_repr = element.clone().chinese_remainder_repr() * &element.chinese_remainder_repr();
+    let element = RqElementCoefficientReprImpl::from(data);
+    let ntt_repr = element.clone().to_chinese_remainder_repr() * &element.to_chinese_remainder_repr();
 
-    let mut expected: [Zq; 256] = [ZERO; 256];
+    let mut expected: [ZqElement; 256] = [ZERO; 256];
     expected[0] = -ONE;
-    assert_eq!(Rq::from(expected), ntt_repr.coefficient_repr());
+    assert_eq!(RqElementCoefficientReprImpl::from(expected), ntt_repr.to_coefficient_repr());
 }
 
 #[test]
 fn test_scalar_mul_div() {
-    let mut element = Rq::from(&ELEMENT[..]);
-    let mut ntt_repr = element.clone().chinese_remainder_repr();
-    element *= Zq::from(653_i16);
-    ntt_repr *= Zq::from(653_i16);
-    assert_eq!(element, NTTDomainRq::coefficient_repr(ntt_repr.clone()));
+    let mut element = RqElementCoefficientReprImpl::from(&ELEMENT[..]);
+    let mut ntt_repr = element.clone().to_chinese_remainder_repr();
+    element *= ZqElement::from(653_i16);
+    ntt_repr *= ZqElement::from(653_i16);
+    assert_eq!(element, RqElementChineseRemainderReprImpl::coefficient_repr(ntt_repr.clone()));
 
-    element *= ONE / Zq::from(5321_i16);
-    ntt_repr *= ONE / Zq::from(5321_i16);
-    assert_eq!(element, NTTDomainRq::coefficient_repr(ntt_repr.clone()));
+    element *= ONE / ZqElement::from(5321_i16);
+    ntt_repr *= ONE / ZqElement::from(5321_i16);
+    assert_eq!(element, RqElementChineseRemainderReprImpl::coefficient_repr(ntt_repr.clone()));
 }
 
 #[test]
 fn test_add_sub() {
-    let mut element = Rq::from(&ELEMENT[..]);
-    let mut ntt_repr = NTTDomainRq::chinese_remainder_repr(element.clone());
+    let mut element = RqElementCoefficientReprImpl::from(&ELEMENT[..]);
+    let mut ntt_repr = element.clone().to_chinese_remainder_repr();
     let base_element = element.clone();
     let base_ntt_repr = ntt_repr.clone();
 
     element += &base_element;
     ntt_repr += &base_ntt_repr;
-    assert_eq!(element, NTTDomainRq::coefficient_repr(ntt_repr.clone()));
+    assert_eq!(element, RqElementChineseRemainderReprImpl::coefficient_repr(ntt_repr.clone()));
 
     element -= &base_element;
     ntt_repr -= &base_ntt_repr;
-    assert_eq!(element, NTTDomainRq::coefficient_repr(ntt_repr));
-    assert_eq!(Rq::from(&ELEMENT[..]), element);
+    assert_eq!(element, RqElementChineseRemainderReprImpl::coefficient_repr(ntt_repr));
+    assert_eq!(RqElementCoefficientReprImpl::from(&ELEMENT[..]), element);
 }
