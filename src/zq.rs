@@ -243,7 +243,7 @@ impl MulAssign<ZqElement> for ZqElement
     #[inline(always)]
     fn mul_assign(&mut self, rhs: ZqElement)
     {
-        self.value = (self.value * rhs.value) % Q;
+        self.value = self.value * rhs.value % Q
     }
 }
 
@@ -357,6 +357,15 @@ impl CompressedZq<1>
     {
         CompressedZq {
             data: (m & 1) as u16
+        }
+    }
+}
+
+#[test]
+fn test_mul() {
+    for i in 0..Q {
+        for j in 0..Q {
+            assert_eq!(ZqElement::from((i * j % Q) as i16), ZqElement::from_perfect(i as i16) * ZqElement::from_perfect(j as i16), "{} * {}", i, j);
         }
     }
 }

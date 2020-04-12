@@ -8,7 +8,7 @@ use super::ring::*;
 
 use sha3::digest::{ ExtendableOutput, Input, XofReader };
 
-type RqElement = ref_r::RqElementCoefficientReprImpl;
+type RqElement = avx_r::RqElementCoefficientReprImpl;
 type Module = module::RqVector3<RqElement>;
 type Matrix = module::RqSquareMatrix3<RqElement>;
 

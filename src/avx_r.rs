@@ -20,72 +20,72 @@ const VEC_COUNT: usize = N / VEC_SIZE;
 
 /// The ring Rq := Zq[X] / (X^256 + 1), using avx instructions for algebraic operations.
 #[derive(Clone)]
-pub struct Rq
+pub struct RqElementCoefficientReprImpl
 {
     data: [ZqVector8; VEC_COUNT]
 }
 
-impl PartialEq for Rq
+impl PartialEq for RqElementCoefficientReprImpl
 {
-    fn eq(&self, rhs: &Rq) -> bool
+    fn eq(&self, rhs: &RqElementCoefficientReprImpl) -> bool
     {
         (0..VEC_COUNT).all(|i| self.data[i] == rhs.data[i])
     }
 }
 
-impl Eq for Rq {}
+impl Eq for RqElementCoefficientReprImpl {}
 
-impl<'a> Add<&'a Rq> for Rq
+impl<'a> Add<&'a RqElementCoefficientReprImpl> for RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a Rq) -> Rq
+    fn add(mut self, rhs: &'a RqElementCoefficientReprImpl) -> RqElementCoefficientReprImpl
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a> Add<Rq> for &'a Rq
+impl<'a> Add<RqElementCoefficientReprImpl> for &'a RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
 
     #[inline(always)]
-    fn add(self, mut rhs: Rq) -> Rq
+    fn add(self, mut rhs: RqElementCoefficientReprImpl) -> RqElementCoefficientReprImpl
     {
         rhs += self;
         return rhs;
     }
 }
 
-impl<'a> Sub<&'a Rq> for Rq
+impl<'a> Sub<&'a RqElementCoefficientReprImpl> for RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a Rq) -> Self::Output
+    fn sub(mut self, rhs: &'a RqElementCoefficientReprImpl) -> Self::Output
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a> Sub<Rq> for &'a Rq
+impl<'a> Sub<RqElementCoefficientReprImpl> for &'a RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
 
     #[inline(always)]
-    fn sub(self, mut rhs: Rq) -> Self::Output
+    fn sub(self, mut rhs: RqElementCoefficientReprImpl) -> Self::Output
     {
         rhs -= self;
         return -rhs;
     }
 }
 
-impl Mul<ZqElement> for Rq
+impl Mul<ZqElement> for RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
 
     #[inline(always)]
     fn mul(mut self, rhs: ZqElement) -> Self::Output
@@ -95,9 +95,9 @@ impl Mul<ZqElement> for Rq
     }
 }
 
-impl Neg for Rq
+impl Neg for RqElementCoefficientReprImpl
 {
-    type Output = Rq;
+    type Output = RqElementCoefficientReprImpl;
     
     #[inline(always)]
     fn neg(mut self) -> Self::Output
@@ -109,10 +109,10 @@ impl Neg for Rq
     }
 }
 
-impl<'a> AddAssign<&'a Rq> for Rq
+impl<'a> AddAssign<&'a RqElementCoefficientReprImpl> for RqElementCoefficientReprImpl
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a Rq)
+    fn add_assign(&mut self, rhs: &'a RqElementCoefficientReprImpl)
     {
         for i in 0..VEC_COUNT {
             self.data[i] += rhs.data[i];
@@ -120,10 +120,10 @@ impl<'a> AddAssign<&'a Rq> for Rq
     }
 }
 
-impl<'a> SubAssign<&'a Rq> for Rq
+impl<'a> SubAssign<&'a RqElementCoefficientReprImpl> for RqElementCoefficientReprImpl
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a Rq)
+    fn sub_assign(&mut self, rhs: &'a RqElementCoefficientReprImpl)
     {
         for i in 0..VEC_COUNT {
             self.data[i] -= rhs.data[i];
@@ -131,7 +131,7 @@ impl<'a> SubAssign<&'a Rq> for Rq
     }
 }
 
-impl MulAssign<ZqElement> for Rq
+impl MulAssign<ZqElement> for RqElementCoefficientReprImpl
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: ZqElement)
@@ -142,39 +142,39 @@ impl MulAssign<ZqElement> for Rq
     }
 }
 
-impl<'a> From<&'a [i16]> for Rq
+impl<'a> From<&'a [i16]> for RqElementCoefficientReprImpl
 {
-    fn from(value: &'a [i16]) -> Rq 
+    fn from(value: &'a [i16]) -> RqElementCoefficientReprImpl 
     {
         assert_eq!(N, value.len());
-        return Rq::from(util::create_array(|i| 
+        return RqElementCoefficientReprImpl::from(util::create_array(|i| 
             ZqVector8::from(&value[i * VEC_SIZE..(i+1) * VEC_SIZE])
         ));
     }
 }
 
-impl<'a> From<[ZqElement; N]> for Rq
+impl<'a> From<[ZqElement; N]> for RqElementCoefficientReprImpl
 {
-    fn from(value: [ZqElement; N]) -> Rq 
+    fn from(value: [ZqElement; N]) -> RqElementCoefficientReprImpl 
     {
-        return Rq::from(util::create_array(|i| 
+        return RqElementCoefficientReprImpl::from(util::create_array(|i| 
             ZqVector8::from(&value[i * VEC_SIZE..(i+1) * VEC_SIZE])
         ));
     }
 }
 
-impl From<[ZqVector8; VEC_COUNT]> for Rq
+impl From<[ZqVector8; VEC_COUNT]> for RqElementCoefficientReprImpl
 {
     #[inline(always)]
-    fn from(data: [ZqVector8; VEC_COUNT]) -> Rq
+    fn from(data: [ZqVector8; VEC_COUNT]) -> RqElementCoefficientReprImpl
     {
-        Rq {
+        RqElementCoefficientReprImpl {
             data: data
         }
     }
 }
 
-impl Debug for Rq
+impl Debug for RqElementCoefficientReprImpl
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
@@ -185,20 +185,20 @@ impl Debug for Rq
     }
 }
 
-impl RqElementCoefficientRepr for Rq
+impl RqElementCoefficientRepr for RqElementCoefficientReprImpl
 {
-    type ChineseRemainderRepr = ChineseRemainderReprRq;
+    type ChineseRemainderRepr = RqElementChineseRemainderReprImpl;
 
-    fn get_zero() -> Rq
+    fn get_zero() -> RqElementCoefficientReprImpl
     {
-        return Rq {
+        return RqElementCoefficientReprImpl {
             data: [ZqVector8::zero(); VEC_COUNT]
         }
     }
 
-    fn to_chinese_remainder_repr(self) -> ChineseRemainderReprRq
+    fn to_chinese_remainder_repr(self) -> RqElementChineseRemainderReprImpl
     {
-        ChineseRemainderReprRq::chinese_remainder_repr(self)
+        RqElementChineseRemainderReprImpl::chinese_remainder_repr(self)
     }
 
     fn compress<const D: u16>(&self) -> CompressedRq<D>
@@ -215,13 +215,13 @@ impl RqElementCoefficientRepr for Rq
         }
     }
 
-    fn decompress<const D: u16>(x: &CompressedRq<D>) -> Rq
+    fn decompress<const D: u16>(x: &CompressedRq<D>) -> RqElementCoefficientReprImpl
     {
         let data: [i32; N] = util::create_array(|i| x.data[i].data as i32);
         let vectorized_data = unsafe {
             avx_util::compose::<N, VEC_COUNT>(data)
         };
-        Rq {
+        RqElementCoefficientReprImpl {
             data: util::create_array(|i| {
                 let compressed: CompressedZq8<D> = CompressedZq8 { data:  vectorized_data[i] };
                 ZqVector8::decompress(compressed)
@@ -234,12 +234,12 @@ impl RqElementCoefficientRepr for Rq
 /// the values of the polynomial at each root of unity
 /// in Zq
 #[derive(Clone)]
-pub struct ChineseRemainderReprRq
+pub struct RqElementChineseRemainderReprImpl
 {
     values: [ZqVector8; VEC_COUNT]
 }
 
-impl ChineseRemainderReprRq
+impl RqElementChineseRemainderReprImpl
 {
     /// Executes the i-th step in the Cooley–Tukey FFT algorithm. Concretely, calculates the DFT
     /// of x_j, x_j+d, ..., x_j+(n-1)d for each j in 0..d and each k in 0..n where d=N/n and
@@ -325,7 +325,7 @@ impl ChineseRemainderReprRq
     }
 
     #[inline(always)]
-    fn chinese_remainder_repr(mut r: Rq) -> ChineseRemainderReprRq
+    fn chinese_remainder_repr(mut r: RqElementCoefficientReprImpl) -> RqElementChineseRemainderReprImpl
     {
         // we do not need the exact fourier transformation (i.e. the evaluation at
         // all 256-th roots of unity), but the evaluation at all primitive 512-th
@@ -335,13 +335,13 @@ impl ChineseRemainderReprRq
         for i in 0..VEC_COUNT {
             r.data[i] *= ZqVector8::from(&UNITY_ROOTS_512[VEC_SIZE * i..VEC_SIZE * i + VEC_SIZE])
         }
-        ChineseRemainderReprRq {
+        RqElementChineseRemainderReprImpl {
             values: Self::fft(r.data, |i| UNITY_ROOTS_512[2 * i])
         }
     }
 
     #[inline(always)]
-    fn coefficient_repr(ntt_repr: ChineseRemainderReprRq) -> Rq
+    fn coefficient_repr(ntt_repr: RqElementChineseRemainderReprImpl) -> RqElementCoefficientReprImpl
     {
         let inv_n: ZqElement = ONE / ZqElement::from(N as i16);
         let mut result = Self::fft(ntt_repr.values, |i| REV_UNITY_ROOTS_512[2 * i]);
@@ -350,73 +350,73 @@ impl ChineseRemainderReprRq
             result[i] *= ZqVector8::from(&REV_UNITY_ROOTS_512[VEC_SIZE * i..VEC_SIZE * i + VEC_SIZE]);
             result[i] *= inv_n;
         }
-        return Rq {
+        return RqElementCoefficientReprImpl {
             data: result
         };
     }
 }
 
-impl PartialEq for ChineseRemainderReprRq
+impl PartialEq for RqElementChineseRemainderReprImpl
 {
-    fn eq(&self, rhs: &ChineseRemainderReprRq) -> bool
+    fn eq(&self, rhs: &RqElementChineseRemainderReprImpl) -> bool
     {
         (0..VEC_COUNT).all(|i| self.values[i] == rhs.values[i])
     }
 }
 
-impl Eq for ChineseRemainderReprRq {}
+impl Eq for RqElementChineseRemainderReprImpl {}
 
-impl<'a> Add<&'a ChineseRemainderReprRq> for ChineseRemainderReprRq
+impl<'a> Add<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
-    type Output = ChineseRemainderReprRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn add(mut self, rhs: &'a ChineseRemainderReprRq) -> Self::Output
+    fn add(mut self, rhs: &'a RqElementChineseRemainderReprImpl) -> Self::Output
     {
         self += rhs;
         return self;
     }
 }
 
-impl<'a> Add<ChineseRemainderReprRq> for &'a ChineseRemainderReprRq
+impl<'a> Add<RqElementChineseRemainderReprImpl> for &'a RqElementChineseRemainderReprImpl
 {
-    type Output = ChineseRemainderReprRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn add(self, mut rhs: ChineseRemainderReprRq) -> Self::Output
+    fn add(self, mut rhs: RqElementChineseRemainderReprImpl) -> Self::Output
     {
         rhs += self;
         return rhs;
     }
 }
 
-impl<'a> Mul<&'a ChineseRemainderReprRq> for ChineseRemainderReprRq
+impl<'a> Mul<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
-    type Output = ChineseRemainderReprRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn mul(mut self, rhs: &'a ChineseRemainderReprRq) -> Self::Output
+    fn mul(mut self, rhs: &'a RqElementChineseRemainderReprImpl) -> Self::Output
     {
         self *= rhs;
         return self;
     }
 }
 
-impl<'a> Mul<ChineseRemainderReprRq> for &'a ChineseRemainderReprRq
+impl<'a> Mul<RqElementChineseRemainderReprImpl> for &'a RqElementChineseRemainderReprImpl
 {
-    type Output = ChineseRemainderReprRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn mul(self, mut rhs: ChineseRemainderReprRq) -> Self::Output
+    fn mul(self, mut rhs: RqElementChineseRemainderReprImpl) -> Self::Output
     {
         rhs *= self;
         return rhs;
     }
 }
 
-impl Mul<ZqElement> for ChineseRemainderReprRq
+impl Mul<ZqElement> for RqElementChineseRemainderReprImpl
 {
-    type Output = ChineseRemainderReprRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
     fn mul(mut self, rhs: ZqElement) -> Self::Output
@@ -426,24 +426,24 @@ impl Mul<ZqElement> for ChineseRemainderReprRq
     }
 }
 
-impl<'a> Sub<&'a ChineseRemainderReprRq> for ChineseRemainderReprRq
+impl<'a> Sub<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
-    type Output = ChineseRemainderReprRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn sub(mut self, rhs: &'a ChineseRemainderReprRq) -> Self::Output
+    fn sub(mut self, rhs: &'a RqElementChineseRemainderReprImpl) -> Self::Output
     {
         self -= rhs;
         return self;
     }
 }
 
-impl<'a> Sub<ChineseRemainderReprRq> for &'a ChineseRemainderReprRq
+impl<'a> Sub<RqElementChineseRemainderReprImpl> for &'a RqElementChineseRemainderReprImpl
 {
-    type Output = ChineseRemainderReprRq;
+    type Output = RqElementChineseRemainderReprImpl;
 
     #[inline(always)]
-    fn sub(self, mut rhs: ChineseRemainderReprRq) -> Self::Output
+    fn sub(self, mut rhs: RqElementChineseRemainderReprImpl) -> Self::Output
     {
         rhs -= self;
         rhs *= ZERO - ONE;
@@ -451,37 +451,37 @@ impl<'a> Sub<ChineseRemainderReprRq> for &'a ChineseRemainderReprRq
     }
 }
 
-impl<'a> AddAssign<&'a ChineseRemainderReprRq> for ChineseRemainderReprRq
+impl<'a> AddAssign<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
     #[inline(always)]
-    fn add_assign(&mut self, rhs: &'a ChineseRemainderReprRq) {
+    fn add_assign(&mut self, rhs: &'a RqElementChineseRemainderReprImpl) {
         for i in 0..VEC_COUNT {
             self.values[i] += rhs.values[i];
         }
     }
 }
 
-impl<'a> SubAssign<&'a ChineseRemainderReprRq> for ChineseRemainderReprRq
+impl<'a> SubAssign<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
     #[inline(always)]
-    fn sub_assign(&mut self, rhs: &'a ChineseRemainderReprRq) {
+    fn sub_assign(&mut self, rhs: &'a RqElementChineseRemainderReprImpl) {
         for i in 0..VEC_COUNT {
             self.values[i] -= rhs.values[i];
         }
     }
 }
 
-impl<'a> MulAssign<&'a ChineseRemainderReprRq> for ChineseRemainderReprRq
+impl<'a> MulAssign<&'a RqElementChineseRemainderReprImpl> for RqElementChineseRemainderReprImpl
 {
     #[inline(always)]
-    fn mul_assign(&mut self, rhs: &'a ChineseRemainderReprRq) {
+    fn mul_assign(&mut self, rhs: &'a RqElementChineseRemainderReprImpl) {
         for i in 0..VEC_COUNT {
             self.values[i] *= rhs.values[i];
         }
     }
 }
 
-impl MulAssign<ZqElement> for ChineseRemainderReprRq
+impl MulAssign<ZqElement> for RqElementChineseRemainderReprImpl
 {
     #[inline(always)]
     fn mul_assign(&mut self, rhs: ZqElement) {
@@ -491,7 +491,7 @@ impl MulAssign<ZqElement> for ChineseRemainderReprRq
     }
 }
 
-impl Debug for ChineseRemainderReprRq
+impl Debug for RqElementChineseRemainderReprImpl
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
@@ -502,7 +502,7 @@ impl Debug for ChineseRemainderReprRq
     }
 }
 
-impl encoding::Encodable for ChineseRemainderReprRq
+impl encoding::Encodable for RqElementChineseRemainderReprImpl
 {
     fn encode<T: encoding::Encoder>(&self, encoder: &mut T)
     {
@@ -515,24 +515,24 @@ impl encoding::Encodable for ChineseRemainderReprRq
 
     fn decode<T: encoding::Decoder>(data: &mut T) -> Self
     {
-        ChineseRemainderReprRq {
+        RqElementChineseRemainderReprImpl {
             values: util::create_array(|_i| ZqVector8::from(util::create_array(|_j| data.read_bits(16).expect("Input too short") as i16)))
         }
     }
 }
 
-impl RqElementChineseRemainderRepr for ChineseRemainderReprRq
+impl RqElementChineseRemainderRepr for RqElementChineseRemainderReprImpl
 {
-    type CoefficientRepr = Rq;
+    type CoefficientRepr = RqElementCoefficientReprImpl;
     
-    fn get_zero() -> ChineseRemainderReprRq
+    fn get_zero() -> RqElementChineseRemainderReprImpl
     {
-        return ChineseRemainderReprRq {
+        return RqElementChineseRemainderReprImpl {
             values: [ZqVector8::zero(); VEC_COUNT]
         }
     }
 
-    fn add_product(&mut self, fst: &ChineseRemainderReprRq, snd: &ChineseRemainderReprRq) 
+    fn add_product(&mut self, fst: &RqElementChineseRemainderReprImpl, snd: &RqElementChineseRemainderReprImpl) 
     {
         for i in 0..VEC_COUNT {
             self.values[i] += fst.values[i] * snd.values[i];
@@ -547,9 +547,9 @@ impl RqElementChineseRemainderRepr for ChineseRemainderReprRq
         }
     }
 
-    fn to_coefficient_repr(self) -> Rq
+    fn to_coefficient_repr(self) -> RqElementCoefficientReprImpl
     {
-        ChineseRemainderReprRq::coefficient_repr(self)
+        RqElementChineseRemainderReprImpl::coefficient_repr(self)
     }
 }
 
@@ -575,17 +575,17 @@ const ELEMENT: [i16; N] = [5487, 7048, 1145, 6716, 88, 5957, 3742, 3441, 2663,
 
 #[bench]
 fn bench_ntt(bencher: &mut test::Bencher) {
-    let element = Rq::from(&ELEMENT[..]);
+    let element = RqElementCoefficientReprImpl::from(&ELEMENT[..]);
     bencher.iter(|| {
-        let ntt_repr = ChineseRemainderReprRq::chinese_remainder_repr(element.clone());
+        let ntt_repr = RqElementChineseRemainderReprImpl::chinese_remainder_repr(element.clone());
         assert_eq!(element, ntt_repr.to_coefficient_repr());
     });
 }
 
 #[test]
 fn test_scalar_mul_div() {
-    let mut element = Rq::from(&ELEMENT[..]);
-    let mut ntt_repr = ChineseRemainderReprRq::chinese_remainder_repr(element.clone());
+    let mut element = RqElementCoefficientReprImpl::from(&ELEMENT[..]);
+    let mut ntt_repr = RqElementChineseRemainderReprImpl::chinese_remainder_repr(element.clone());
     element *= ZqElement::from(653_i16);
     ntt_repr *= ZqElement::from(653_i16);
     assert_eq!(element, ntt_repr.clone().to_coefficient_repr());
@@ -597,37 +597,37 @@ fn test_scalar_mul_div() {
 
 #[test]
 fn test_add_sub() {
-    let mut element = Rq::from(&ELEMENT[..]);
-    let mut ntt_repr = ChineseRemainderReprRq::chinese_remainder_repr(element.clone());
+    let mut element = RqElementCoefficientReprImpl::from(&ELEMENT[..]);
+    let mut ntt_repr = RqElementChineseRemainderReprImpl::chinese_remainder_repr(element.clone());
     let base_element = element.clone();
     let base_ntt_repr = ntt_repr.clone();
 
     element += &base_element;
     ntt_repr += &base_ntt_repr;
-    assert_eq!(element, ChineseRemainderReprRq::coefficient_repr(ntt_repr.clone()));
+    assert_eq!(element, RqElementChineseRemainderReprImpl::coefficient_repr(ntt_repr.clone()));
 
     element -= &base_element;
     ntt_repr -= &base_ntt_repr;
-    assert_eq!(element, ChineseRemainderReprRq::coefficient_repr(ntt_repr));
-    assert_eq!(Rq::from(&ELEMENT[..]), element);
+    assert_eq!(element, RqElementChineseRemainderReprImpl::coefficient_repr(ntt_repr));
+    assert_eq!(RqElementCoefficientReprImpl::from(&ELEMENT[..]), element);
 }
 
 #[test]
 fn test_mul() {
     let mut data: [ZqElement; 256] = [ZERO; 256];
     data[128] = ONE;
-    let element = Rq::from(data);
+    let element = RqElementCoefficientReprImpl::from(data);
     let ntt_repr = element.clone().to_chinese_remainder_repr() * &element.to_chinese_remainder_repr();
 
     let mut expected: [ZqElement; 256] = [ZERO; 256];
     expected[0] = -ONE;
-    assert_eq!(Rq::from(expected), ntt_repr.to_coefficient_repr());
+    assert_eq!(RqElementCoefficientReprImpl::from(expected), ntt_repr.to_coefficient_repr());
 }
 
 #[test]
 fn test_compress() {
-    let mut element = Rq::from(&ELEMENT[..]);
+    let mut element = RqElementCoefficientReprImpl::from(&ELEMENT[..]);
     let compressed: CompressedRq<3_u16> = element.compress();
-    element = Rq::decompress(&compressed);
+    element = RqElementCoefficientReprImpl::decompress(&compressed);
     assert_eq!(ZqVector8::from(&[5761, 6721, 960, 6721, 0, 5761, 3840, 3840][..]), element.data[0]);
 }
