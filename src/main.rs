@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 #![feature(test)]
 #![feature(const_generics)]
+#![feature(try_trait)]
 
 extern crate test;
 extern crate sha3;
@@ -42,31 +43,37 @@ fn time_seed() -> Seed
     return result;
 }
 
-fn cli_encrypt(key: &String, message: &String) -> encoding::Result<String>
+fn cli_encrypt(key: String, message: String) -> String
 {
-    let mut key_decoder = encoding::Base64Decoder::new(key.as_str());
-    let pk: PublicKey = (CompressedModule::decode(&mut key_decoder)?, key_decoder.read_bytes()?);
-    let mut message_decoder = encoding::Base64Decoder::new(message.as_str());
-    let message: Plaintext = message_decoder.read_bytes()?;
+    let mut key_decoder = encoding::base64_decode(&key);
+    let pk: PublicKey = (CompressedModule::decode(&mut key_decoder), key_decoder.read_bytes().expect("Input too short"));
+    let mut message_decoder = encoding::base64_decode(&message);
+    let message: Plaintext = message_decoder.read_bytes().expect("Input too short");
     let ciphertext = encrypt(&pk, message, time_seed());
 
-    let mut encoder = encoding::Base64Encoder::new();
-    ciphertext.0.encode(&mut encoder);
-    ciphertext.1.encode(&mut encoder);
-    return Ok(encoder.get());
+    let mut result = String::new();
+    {
+        let mut encoder = encoding::base64_encode(&mut result);
+        ciphertext.0.encode(&mut encoder);
+        ciphertext.1.encode(&mut encoder);
+    }
+    return result;
 }
 
-fn cli_decrypt(key: &String, ciphertext: &String) -> encoding::Result<String>
+fn cli_decrypt(key: String, ciphertext: String) -> String
 {
-    let mut key_decoder = encoding::Base64Decoder::new(key.as_str());
-    let sk: SecretKey = RqVector3::decode(&mut key_decoder)?;
-    let mut ciphertext_decoder = encoding::Base64Decoder::new(ciphertext.as_str());
-    let ciphertext: Ciphertext = (CompressedModule::decode(&mut ciphertext_decoder)?, CompressedRq::decode(&mut ciphertext_decoder)?);
+    let mut key_decoder = encoding::base64_decode(&key);
+    let sk: SecretKey = RqVector3::decode(&mut key_decoder);
+    let mut ciphertext_decoder = encoding::base64_decode(&ciphertext);
+    let ciphertext: Ciphertext = (CompressedModule::decode(&mut ciphertext_decoder), CompressedRq::decode(&mut ciphertext_decoder));
     let message: Plaintext = decrypt(&sk, ciphertext);
 
-    let mut encoder = encoding::Base64Encoder::new();
-    encoder.encode_bytes(&message);
-    return Ok(encoder.get());
+    let mut result = String::new();
+    {
+        let mut encoder = encoding::base64_encode(&mut result);
+        encoder.encode_bytes(&message);
+    }
+    return result;
 }
 
 fn main() 
@@ -85,47 +92,41 @@ fn main()
                 println!("  longer messages are also allowed, then only the prefix will be used");
                 return;
             }
-            let encryption = cli_encrypt(&args[2], &args[3]);
-            match encryption {
-                Ok(ciphertext) => {
-                    println!("");
-                    println!("Ciphertext is {}", ciphertext);
-                    println!("");
-                },
-                Err(_) => {
-                    println!("Message or key invalid!");
-                }
-            }
+            let mut arguments = args.into_iter().skip(2);
+            let encryption = cli_encrypt(arguments.next().unwrap(), arguments.next().unwrap());
+            println!("");
+            println!("Ciphertext is {}", encryption);
+            println!("");
         },
         "dec" => {
             if args.len() < 4 {
                 println!("Usage: crystals_kyber.exe dec secret_key ciphertext");
                 return;
             }
-            let decryption = cli_decrypt(&args[2], &args[3]);
-            match decryption {
-                Ok(plaintext) => {
-                    println!("");
-                    println!("Plaintext is {}", plaintext);
-                    println!("");
-                },
-                Err(_) => {
-                    println!("Ciphertext or key invalid!");
-                }
-            }
+            let mut arguments = args.into_iter().skip(2);
+            let decryption = cli_decrypt(arguments.next().unwrap(), arguments.next().unwrap());
+            println!("");
+            println!("Plaintext is {}", decryption);
+            println!("");
         },
         "gen" => {
             let (sk, pk) = key_gen(time_seed(), time_seed());
-            let mut pk_encoder = encoding::Base64Encoder::new();
-            pk.0.encode(&mut pk_encoder);
-            pk_encoder.encode_bytes(&pk.1);
+            let mut pk_string = String::new();
+            {
+                let mut pk_encoder = encoding::base64_encode(&mut pk_string);
+                pk.0.encode(&mut pk_encoder);
+                pk_encoder.encode_bytes(&pk.1);
+            }
             println!("");
-            println!("Public key is {}", pk_encoder.get());
+            println!("Public key is {}", pk_string);
 
-            let mut sk_encoder = encoding::Base64Encoder::new();
-            sk.encode(&mut sk_encoder);
+            let mut sk_string = String::new();
+            {
+                let mut sk_encoder = encoding::base64_encode(&mut sk_string);
+                sk.encode(&mut sk_encoder);
+            }
             println!("");
-            println!("Secret key is {}", sk_encoder.get());
+            println!("Secret key is {}", sk_string);
             println!("");
         },
         _ => println!("Command must be one of enc, dec, gen, got command {}", args[1])

@@ -295,11 +295,11 @@ impl<const D: u16> encoding::Encodable for CompressedZq<D>
         encoder.encode_bits(self.data, D as usize);
     }
 
-    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> Self
     {
-        Ok(CompressedZq {
-            data: data.read_bits(D as usize)?
-        })
+        CompressedZq {
+            data: data.read_bits(D as usize).expect("Input too short")
+        }
     }
 }
 

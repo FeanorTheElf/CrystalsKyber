@@ -2,7 +2,6 @@ use super::zq::*;
 use super::ring::*;
 use super::util;
 use super::encoding;
-use super::encoding::Encodable;
 
 use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, SubAssign };
 use std::convert::From;
@@ -16,7 +15,7 @@ pub const DIM: usize = 3;
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct RqVector3<R: RqElementCoefficientRepr>
 {
-    data: [R::ChineseRemainderRepr; DIM]
+    pub data: [R::ChineseRemainderRepr; DIM]
 }
 
 impl<R: RqElementCoefficientRepr> encoding::Encodable for RqVector3<R>
@@ -28,11 +27,11 @@ impl<R: RqElementCoefficientRepr> encoding::Encodable for RqVector3<R>
         }
     }
 
-    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> Self
     {
-        Ok(RqVector3 {
-            data: util::try_create_array(|_i| R::ChineseRemainderRepr::decode(data))?
-        })
+        RqVector3 {
+            data: util::create_array(|_i| R::ChineseRemainderRepr::decode(data))
+        }
     }
 }
 
@@ -268,11 +267,11 @@ impl<const D: u16> encoding::Encodable for CompressedModule<D>
         }
     }
 
-    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> Self
     {
-        Ok(CompressedModule {
-            data: util::try_create_array(|_i| CompressedRq::decode(data))?
-        })
+        CompressedModule {
+            data: util::create_array(|_i| CompressedRq::decode(data))
+        }
     }
 }
 
@@ -282,18 +281,18 @@ impl<T: RqElementCoefficientRepr> RqVector3<T>
     {
         let [fst, snd, trd] = self.data;
         CompressedModule {
-            data: [RqElementChineseRemainderRepr::to_coefficient_repr(fst).compress(), 
-                RqElementChineseRemainderRepr::to_coefficient_repr(snd).compress(), 
-                RqElementChineseRemainderRepr::to_coefficient_repr(trd).compress()]
+            data: [fst.to_coefficient_repr().compress(), 
+                snd.to_coefficient_repr().compress(), 
+                trd.to_coefficient_repr().compress()]
         }
     }
 
     pub fn decompress<const D: u16>(x: &CompressedModule<D>) -> RqVector3<T>
     {
         RqVector3 {
-            data: [T::to_chinese_remainder_repr(T::decompress(&x.data[0])),
-                T::to_chinese_remainder_repr(T::decompress(&x.data[1])), 
-                T::to_chinese_remainder_repr(T::decompress(&x.data[2]))]
+            data: [T::decompress(&x.data[0]).to_chinese_remainder_repr(),
+                T::decompress(&x.data[1]).to_chinese_remainder_repr(), 
+                T::decompress(&x.data[2]).to_chinese_remainder_repr()]
         }
     }
 }

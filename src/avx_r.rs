@@ -513,11 +513,11 @@ impl encoding::Encodable for ChineseRemainderReprRq
         }
     }
 
-    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> Self
     {
-        Ok(ChineseRemainderReprRq {
-            values: util::try_create_array(|_i| Ok(ZqVector8::from(util::try_create_array(|_j| Ok(data.read_bits(16)? as i16))?)))?
-        })
+        ChineseRemainderReprRq {
+            values: util::create_array(|_i| ZqVector8::from(util::create_array(|_j| data.read_bits(16).expect("Input too short") as i16)))
+        }
     }
 }
 

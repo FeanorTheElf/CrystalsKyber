@@ -211,7 +211,7 @@ impl RqElementCoefficientRepr for RqElementCoefficientReprImpl
 #[derive(Clone)]
 pub struct RqElementChineseRemainderReprImpl
 {
-    values: [ZqElement; N]
+    pub values: [ZqElement; N]
 }
 
 impl RqElementChineseRemainderReprImpl
@@ -466,15 +466,14 @@ impl encoding::Encodable for RqElementChineseRemainderReprImpl
         }
     }
 
-    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> Self
     {
-        Ok(RqElementChineseRemainderReprImpl {
-            values: util::try_create_array(|_i| {
-                let data_bits = data.read_bits(ENCODE_ENTRY_BITS)?;
-                println!("{}", data_bits);
-                Ok(ZqElement::from_perfect(data_bits as i16))
-            })?
-        })
+        RqElementChineseRemainderReprImpl {
+            values: util::create_array(|_i| {
+                let data_bits = data.read_bits(ENCODE_ENTRY_BITS).expect("Input too short");
+                ZqElement::from_perfect(data_bits as i16)
+            })
+        }
     }
 }
 

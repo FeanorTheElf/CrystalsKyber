@@ -7,8 +7,6 @@ use std::convert::From;
 use super::encoding;
 use super::util;
 
-use sha3::digest::XofReader;
-
 ///Degree of the ring extension
 pub const N: usize = 256;
 
@@ -65,11 +63,11 @@ impl<const D: u16> encoding::Encodable for CompressedRq<D>
         }
     }
 
-    fn decode<T: encoding::Decoder>(data: &mut T) -> encoding::Result<Self>
+    fn decode<T: encoding::Decoder>(data: &mut T) -> Self
     {
-        Ok(CompressedRq {
-            data: util::try_create_array(|_i| CompressedZq::decode(data))?
-        })
+        CompressedRq {
+            data: util::create_array(|_i| CompressedZq::decode(data))
+        }
     }
 }
 
