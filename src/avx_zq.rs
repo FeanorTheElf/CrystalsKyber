@@ -339,17 +339,11 @@ fn test_mul() {
 #[test]
 fn test_modulo_q() {
     // Check that the hacky mod_q procedure really works for all values in (Q - 1)^2
-    for x in 0..(Q - 1)*(Q - 1) {
-        let p: i32 = x as i32;
-        let f: f32 = p as f32;
-        let q: f32 = f * Q_INV;
-        let r: i32 = q.floor() as i32;
-        let mut m: i32 = p - r * Q;
-        if m < 0 {
-            m += Q;
-        } else if m >= Q {
-            m -= Q;
+    unsafe {
+        for x in 0..(Q * Q / 8 + 1) {
+            let value = avx_util::compose::<8, 1>(util::create_array(|i| x + i as i32))[0];
+            let expected = avx_util::compose::<8, 1>(util::create_array(|i| (x + i as i32) % Q))[0];
+            assert!(avx_util::eq(expected, mod_q(value)));
         }
-        assert!((x as i32) % Q == m, "Expected {}, got {} at for {}", (x as i32) % Q, m, x);
     }
 }
