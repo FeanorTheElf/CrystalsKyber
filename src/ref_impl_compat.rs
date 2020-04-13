@@ -72,7 +72,7 @@ pub fn write_sk_to_ref_impl(secret_key: &SecretKey) -> String
         let mut encoder = base64_encode(&mut result);
         for i in 0..DIM {
             for j in 0..N {
-                encoder.encode_bits(secret_key[i].value_at_zeta(j).representative_pos() as u16, 13)
+                encoder.encode_bits(secret_key[i].value_at_zeta(CONVERT_PERMUTATION_INDICES[j]).representative_pos() as u16, 13)
             }
         }
     }
