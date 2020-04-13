@@ -153,10 +153,11 @@ impl<'a> From<&'a [i16]> for RqElementCoefficientReprImpl
     }
 }
 
-impl<'a> From<[ZqElement; N]> for RqElementCoefficientReprImpl
+impl From<[ZqElement; N]> for RqElementCoefficientReprImpl
 {
     fn from(value: [ZqElement; N]) -> RqElementCoefficientReprImpl 
     {
+        assert_eq!(N, value.len());
         return RqElementCoefficientReprImpl::from(util::create_array(|i| 
             ZqVector8::from(&value[i * VEC_SIZE..(i+1) * VEC_SIZE])
         ));
@@ -491,6 +492,39 @@ impl MulAssign<ZqElement> for RqElementChineseRemainderReprImpl
     }
 }
 
+impl<'a> From<&'a [i16]> for RqElementChineseRemainderReprImpl
+{
+    fn from(value: &'a [i16]) -> RqElementChineseRemainderReprImpl 
+    {
+        assert_eq!(N, value.len());
+        return RqElementChineseRemainderReprImpl::from(util::create_array(|i| 
+            ZqVector8::from(&value[i * VEC_SIZE..(i+1) * VEC_SIZE])
+        ));
+    }
+}
+
+impl From<[ZqElement; N]> for RqElementChineseRemainderReprImpl
+{
+    fn from(value: [ZqElement; N]) -> RqElementChineseRemainderReprImpl 
+    {
+        assert_eq!(N, value.len());
+        return RqElementChineseRemainderReprImpl::from(util::create_array(|i| 
+            ZqVector8::from(&value[i * VEC_SIZE..(i+1) * VEC_SIZE])
+        ));
+    }
+}
+
+impl From<[ZqVector8; VEC_COUNT]> for RqElementChineseRemainderReprImpl
+{
+    #[inline(always)]
+    fn from(data: [ZqVector8; VEC_COUNT]) -> RqElementChineseRemainderReprImpl
+    {
+        RqElementChineseRemainderReprImpl {
+            values: data
+        }
+    }
+}
+
 impl Debug for RqElementChineseRemainderReprImpl
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
@@ -550,6 +584,11 @@ impl RqElementChineseRemainderRepr for RqElementChineseRemainderReprImpl
     fn to_coefficient_repr(self) -> RqElementCoefficientReprImpl
     {
         RqElementChineseRemainderReprImpl::coefficient_repr(self)
+    }
+
+    fn value_at_zeta(&self, zeta_index: usize) -> ZqElement
+    {
+        self.values[zeta_index/8].as_array()[zeta_index % 8]
     }
 }
 

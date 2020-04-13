@@ -117,7 +117,7 @@ pub struct ByteStreamEncoder<C>
 impl<C> ByteStreamEncoder<C>
     where C: FnMut(u8)
 {
-    fn new(consumer: C) -> Self
+    pub fn new(consumer: C) -> Self
     {
         ByteStreamEncoder {
             consumer: consumer,
@@ -148,7 +148,7 @@ pub struct ByteStreamDecoder<P>
 impl<P> ByteStreamDecoder<P>
     where P: FnMut() -> Option<u8>
 {
-    fn new(producer: P) -> Self
+    pub fn new(producer: P) -> Self
     {
         ByteStreamDecoder {
             producer: producer,
@@ -180,7 +180,7 @@ pub struct Base64Encoder<C>
 impl<C> Base64Encoder<C>
     where C: FnMut(char)
 {
-    fn new(consumer: C) -> Self
+    pub fn new(consumer: C) -> Self
     {
         Base64Encoder {
             consumer: consumer,
@@ -191,7 +191,7 @@ impl<C> Base64Encoder<C>
 
     fn append_symbol(&mut self, symbol: u8)
     {
-        self.symbol_count_mod_4 = (self.symbol_count_mod_4 + 1) & 0x3;
+        self.symbol_count_mod_4 = (self.symbol_count_mod_4 + 1) & 0b11;
         if symbol < 26 {
             (self.consumer)(char::from(65 + symbol));
         } else if symbol < 52 {
@@ -216,7 +216,7 @@ impl<C> std::ops::Drop for Base64Encoder<C>
             let new_symbol = (self.current_buffer.read_bits(buffer_len) as u8) << (6 - buffer_len);
             self.append_symbol(new_symbol);
         }
-        for _ in self.symbol_count_mod_4..4 {
+        for _ in 0..((4 - self.symbol_count_mod_4) & 0b11) {
             (self.consumer)('=');
         }
     }
@@ -277,7 +277,7 @@ impl<P> Base64Decoder<P>
             '0'..='9' => 4,
             '+' => 19,
             '/' => 16,
-            _ => panic!("Unknown character {}", c)
+            _ => panic!("Unknown character \"{}\"", c)
         };
         let mut result: [u8; 1] = [0; 1];
         c.encode_utf8(&mut result);
@@ -303,19 +303,6 @@ pub trait Encodable: Sized
 {
     fn encode<T: Encoder>(&self, encoder: &mut T);
     fn decode<T: Decoder>(data: &mut T) -> Self;
-}
-
-pub fn base64_encode<'a>(result: &'a mut String) -> impl Encoder + 'a
-{
-    let mut base64_encoder = Base64Encoder::new(move |c| result.push(c));
-    ByteStreamEncoder::new(move |byte| base64_encoder.encode(byte))
-}
-
-pub fn base64_decode<'a>(result: &'a str) -> impl Decoder + 'a
-{
-    let mut input_iter = result.chars();
-    let mut base64_decoder = Base64Decoder::new(move || input_iter.next());
-    ByteStreamDecoder::new(move || base64_decoder.read())
 }
 
 #[test]

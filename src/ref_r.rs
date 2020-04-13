@@ -123,12 +123,8 @@ impl<'a> From<&'a [i16]> for RqElementCoefficientReprImpl
 {
     fn from(value: &'a [i16]) -> RqElementCoefficientReprImpl {
         assert_eq!(N, value.len());
-        let mut data: [ZqElement; N] = [ZERO; N];
-        for i in 0..N {
-            data[i] = ZqElement::from(value[i]);
-        }
         return RqElementCoefficientReprImpl {
-            data: data
+            data: util::create_array(|i| ZqElement::from(value[i]))
         };
     }
 }
@@ -138,8 +134,9 @@ impl From<[ZqElement; N]> for RqElementCoefficientReprImpl
     #[inline(always)]
     fn from(data: [ZqElement; N]) -> RqElementCoefficientReprImpl
     {
+        assert_eq!(N, data.len());
         RqElementCoefficientReprImpl {
-            data: data
+            data: util::create_array(|i| data[i])
         }
     }
 }
@@ -211,7 +208,7 @@ impl RqElementCoefficientRepr for RqElementCoefficientReprImpl
 #[derive(Clone)]
 pub struct RqElementChineseRemainderReprImpl
 {
-    pub values: [ZqElement; N]
+    values: [ZqElement; N]
 }
 
 impl RqElementChineseRemainderReprImpl
@@ -429,20 +426,6 @@ impl MulAssign<ZqElement> for RqElementChineseRemainderReprImpl
     }
 }
 
-impl<'a> From<&'a [i16]> for RqElementChineseRemainderReprImpl
-{
-    fn from(value: &'a [i16]) -> RqElementChineseRemainderReprImpl {
-        assert_eq!(N, value.len());
-        let mut values: [ZqElement; N] = [ZERO; N];
-        for i in 0..N {
-            values[i] = ZqElement::from(value[i]);
-        }
-        return RqElementChineseRemainderReprImpl {
-            values: values
-        };
-    }
-}
-
 impl Debug for RqElementChineseRemainderReprImpl
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
@@ -477,6 +460,28 @@ impl encoding::Encodable for RqElementChineseRemainderReprImpl
     }
 }
 
+impl<'a> From<&'a [i16]> for RqElementChineseRemainderReprImpl
+{
+    fn from(value: &'a [i16]) -> Self
+    {
+        assert_eq!(N, value.len());
+        RqElementChineseRemainderReprImpl {
+            values: util::create_array(|i| ZqElement::from(value[i]))
+        }
+    }
+}
+
+impl From<[ZqElement; N]> for RqElementChineseRemainderReprImpl
+{
+    fn from(value: [ZqElement; N]) -> Self
+    {
+        assert_eq!(N, value.len());
+        RqElementChineseRemainderReprImpl {
+            values: util::create_array(|i| value[i])
+        }
+    }
+}
+
 impl RqElementChineseRemainderRepr for RqElementChineseRemainderReprImpl
 {
     type CoefficientRepr = RqElementCoefficientReprImpl;
@@ -503,6 +508,11 @@ impl RqElementChineseRemainderRepr for RqElementChineseRemainderReprImpl
         for i in 0..N {
             self.values[i] += a.values[i] * b.values[i];
         }
+    }
+    
+    fn value_at_zeta(&self, zeta_index: usize) -> ZqElement
+    {
+        self.values[zeta_index]
     }
 }
 

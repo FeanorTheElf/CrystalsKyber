@@ -176,6 +176,16 @@ impl<R: RqElementCoefficientRepr> From<[R::ChineseRemainderRepr; DIM]> for RqVec
     }
 }
 
+impl<R: RqElementCoefficientRepr> std::ops::Index<usize> for RqVector3<R>
+{
+    type Output = R::ChineseRemainderRepr;
+
+    fn index(&self, i: usize) -> &Self::Output
+    {
+        &self.data[i]
+    }
+}
+
 /// A dxd matrix over the given RqElementCoefficientRepr R, where d = DIM = 3.
 #[derive(PartialEq, Eq, Clone)]
 pub struct RqSquareMatrix3<R: RqElementCoefficientRepr>
@@ -253,12 +263,12 @@ impl<'a, R: RqElementCoefficientRepr> Mul<&'a RqVector3<R>> for TransposedMat<'a
 }
 
 #[derive(Debug, Clone)]
-pub struct CompressedModule<const D: u16>
+pub struct CompressedRqVector<const D: u16>
 {
     data: [CompressedRq<D>; DIM]
 }
 
-impl<const D: u16> encoding::Encodable for CompressedModule<D>
+impl<const D: u16> encoding::Encodable for CompressedRqVector<D>
 {
     fn encode<T: encoding::Encoder>(&self, encoder: &mut T)
     {
@@ -269,7 +279,7 @@ impl<const D: u16> encoding::Encodable for CompressedModule<D>
 
     fn decode<T: encoding::Decoder>(data: &mut T) -> Self
     {
-        CompressedModule {
+        CompressedRqVector {
             data: util::create_array(|_i| CompressedRq::decode(data))
         }
     }
@@ -277,17 +287,17 @@ impl<const D: u16> encoding::Encodable for CompressedModule<D>
 
 impl<T: RqElementCoefficientRepr> RqVector3<T>
 {
-    pub fn compress<const D: u16>(self) -> CompressedModule<D>
+    pub fn compress<const D: u16>(self) -> CompressedRqVector<D>
     {
         let [fst, snd, trd] = self.data;
-        CompressedModule {
+        CompressedRqVector {
             data: [fst.to_coefficient_repr().compress(), 
                 snd.to_coefficient_repr().compress(), 
                 trd.to_coefficient_repr().compress()]
         }
     }
 
-    pub fn decompress<const D: u16>(x: &CompressedModule<D>) -> RqVector3<T>
+    pub fn decompress<const D: u16>(x: &CompressedRqVector<D>) -> RqVector3<T>
     {
         RqVector3 {
             data: [T::decompress(&x.data[0]).to_chinese_remainder_repr(),

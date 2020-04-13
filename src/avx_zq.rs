@@ -91,7 +91,7 @@ impl<'a> From<&'a [ZqElement]> for ZqVector8
     {
         assert_eq!(8, value.len());
         return ZqVector8::from(
-            create_array(|i: usize| value[i].representative_pos())
+            create_array(|i| value[i])
         );
     }
 }
@@ -102,7 +102,7 @@ impl<'a> From<&'a [i16]> for ZqVector8
     {
         assert_eq!(8, value.len());
         return ZqVector8::from(
-            create_array(|i: usize| value[i])
+            create_array(|i| value[i])
         );
     }
 }
@@ -111,9 +111,10 @@ impl From<[ZqElement; 8]> for ZqVector8
 {
     fn from(value: [ZqElement; 8]) -> ZqVector8
     {
-        return ZqVector8::from(
-            create_array(|i: usize| value[i].representative_pos())
-        );
+        let data = create_array(|i| value[i].representative_pos() as i32);
+        return ZqVector8 {
+            data: unsafe { avx_util::compose::<8, 1>(data)[0] }
+        };
     }
 }
 

@@ -12,7 +12,7 @@ pub const N: usize = 256;
 
 /// Elements of the ring Rq := Zq[X] / (X^N + 1)
 pub trait RqElementCoefficientRepr: Eq + Clone + 
-    for<'a> From<&'a [i16]> +
+    for<'a> From<&'a [i16]> + From<[ZqElement; 256]> +
     for<'a> Add<&'a Self, Output = Self> + 
     for<'a> Sub<&'a Self, Output = Self> + 
     Mul<ZqElement, Output = Self> +
@@ -29,6 +29,7 @@ pub trait RqElementCoefficientRepr: Eq + Clone +
 }
 
 pub trait RqElementChineseRemainderRepr: Eq + Clone + encoding::Encodable +
+    for<'a> From<&'a [i16]> + From<[ZqElement; 256]> +
     for<'a> Add<&'a Self, Output = Self> + 
     for<'a> Sub<&'a Self, Output = Self> + 
     for<'a> Mul<&'a Self, Output = Self> + 
@@ -40,8 +41,8 @@ pub trait RqElementChineseRemainderRepr: Eq + Clone + encoding::Encodable +
 
     fn get_zero() -> Self;
     fn to_coefficient_repr(self) -> Self::CoefficientRepr;
+    fn value_at_zeta(&self, zeta_index: usize) -> ZqElement;
     fn mul_scalar(&mut self, x: ZqElement);
-
     /// More efficient but semantically equivalent to `self += a * b`
     fn add_product(&mut self, a: &Self, b: &Self);
 }

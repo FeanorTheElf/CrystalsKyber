@@ -1,30 +1,30 @@
 use super::util;
 use super::ref_r;
 use super::avx_r;
-use super::module;
+use super::rqvec;
 use super::zq::*;
-use super::module::*;
+use super::rqvec::*;
 use super::ring::*;
 
 use sha3::digest::{ ExtendableOutput, Input, XofReader };
 
-type RqElement = avx_r::RqElementCoefficientReprImpl;
-type Module = module::RqVector3<RqElement>;
-type Matrix = module::RqSquareMatrix3<RqElement>;
+pub type RqElement = ref_r::RqElementCoefficientReprImpl;
+pub type RqVector = rqvec::RqVector3<RqElement>;
+pub type RqMatrix = rqvec::RqSquareMatrix3<RqElement>;
 
 /// Each public key and ciphertext element is compressed using this count of bits
 const COMPRESSED_VECTOR_BIT_SIZE: u16 = 11;
 const COMPRESSED_RING_ELEMENT_BIT_SIZE: u16 = 3;
 
 pub type Seed = [u8; 32];
-pub type PublicKey = (CompressedModule<COMPRESSED_VECTOR_BIT_SIZE>, Seed);
-pub type SecretKey = Module;
-pub type Ciphertext = (CompressedModule<COMPRESSED_VECTOR_BIT_SIZE>, CompressedRq<COMPRESSED_RING_ELEMENT_BIT_SIZE>);
+pub type PublicKey = (CompressedRqVector<COMPRESSED_VECTOR_BIT_SIZE>, Seed);
+pub type SecretKey = RqVector;
+pub type Ciphertext = (CompressedRqVector<COMPRESSED_VECTOR_BIT_SIZE>, CompressedRq<COMPRESSED_RING_ELEMENT_BIT_SIZE>);
 pub type Plaintext = [u8; 32];
 
 pub fn encrypt(pk: &PublicKey, plaintext: Plaintext, enc_seed: Seed) -> Ciphertext
 {
-    let t = Module::decompress(&pk.0);
+    let t = RqVector::decompress(&pk.0);
     let A = sample_uniform_matrix(expand_randomness_shake_128(pk.1));
     let mut noise_random = expand_randomness_shake_256(enc_seed);
     let r = sample_error_distribution_vector(&mut noise_random);
@@ -38,7 +38,7 @@ pub fn encrypt(pk: &PublicKey, plaintext: Plaintext, enc_seed: Seed) -> Cipherte
 
 pub fn decrypt(sk: &SecretKey, c: Ciphertext) -> Plaintext
 {
-    let u = Module::decompress(&c.0);
+    let u = RqVector::decompress(&c.0);
     let v = RqElement::decompress(&c.1);
     let m = v - &(sk * &u).to_coefficient_repr();
     return m.compress().get_data();
@@ -46,11 +46,11 @@ pub fn decrypt(sk: &SecretKey, c: Ciphertext) -> Plaintext
 
 pub fn key_gen(matrix_seed: Seed, secret_seed: Seed) -> (SecretKey, PublicKey)
 {
-    let a: Matrix = sample_uniform_matrix(expand_randomness_shake_128(matrix_seed));
+    let a: RqMatrix = sample_uniform_matrix(expand_randomness_shake_128(matrix_seed));
     let mut noise = expand_randomness_shake_256(secret_seed);
-    let s: Module = sample_error_distribution_vector(&mut noise);
-    let e: Module = sample_error_distribution_vector(&mut noise);
-    let b: Module = &a * &s + &e;
+    let s: RqVector = sample_error_distribution_vector(&mut noise);
+    let e: RqVector = sample_error_distribution_vector(&mut noise);
+    let b: RqVector = &a * &s + &e;
     return (s, (b.compress(), matrix_seed));
 }
 
@@ -69,7 +69,7 @@ fn sample_uniform_zq<T: XofReader>(mut reader: T) -> impl Iterator<Item = ZqElem
     })
 }
 
-fn sample_uniform_matrix<T: XofReader>(reader: T) -> Matrix
+fn sample_uniform_matrix<T: XofReader>(reader: T) -> RqMatrix
 {
     let mut iter = sample_uniform_zq(reader);
     let matrix_content = util::create_array(|_row| 
@@ -77,7 +77,7 @@ fn sample_uniform_matrix<T: XofReader>(reader: T) -> Matrix
             RqElement::from(util::create_array_it(&mut iter)).to_chinese_remainder_repr()
         })
     );
-    return Matrix::from(matrix_content);
+    return RqMatrix::from(matrix_content);
 }
 
 fn sample_centered_binomial_distribution(random: u8) -> ZqElement
@@ -89,14 +89,14 @@ fn sample_centered_binomial_distribution(random: u8) -> ZqElement
     return ZqElement::from_perfect(value);
 }
 
-fn sample_error_distribution_vector<T: XofReader>(reader: &mut T) -> Module
+fn sample_error_distribution_vector<T: XofReader>(reader: &mut T) -> RqVector
 {
     let mut buffer: [u8; N] = [0; N];
     let data = util::create_array(|_| {
         reader.read(&mut buffer);
         RqElement::from(util::create_array(|i| sample_centered_binomial_distribution(buffer[i]))).to_chinese_remainder_repr()
     });
-    return Module::from(data);
+    return RqVector::from(data);
 }
 
 fn sample_error_distribution_element<T: XofReader>(reader: &mut T) -> RqElement

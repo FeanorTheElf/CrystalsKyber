@@ -369,3 +369,14 @@ fn test_mul() {
         }
     }
 }
+
+use super::ref_impl_compat;
+use super::encoding::Encodable;
+
+#[test]
+fn test_decompress() {
+    let value: CompressedZq<11> = CompressedZq {
+        data: 1578
+    };
+    assert_eq!(ZqElement::from(5918), ZqElement::decompress(value));
+}
