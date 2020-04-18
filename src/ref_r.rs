@@ -3,6 +3,7 @@ use super::ring::*;
 
 use super::util;
 use super::encoding;
+use super::ref_impl_compat;
 
 use std::ops::{ Add, Mul, Sub, AddAssign, MulAssign, SubAssign };
 use std::cmp::{ PartialEq, Eq };
@@ -173,8 +174,12 @@ impl RqElementCoefficientRepr for RqElementCoefficientReprImpl
         for i in 0..N {
             self.data[i] *= UNITY_ROOTS_512[i]
         }
+        let mut result_values = RqElementChineseRemainderReprImpl::fft(self.data, |i| UNITY_ROOTS_512[2 * i]);
+        if cfg!(feature = "compatibility") {
+            result_values = ref_impl_compat::convert_our_crt_their_crt(result_values);
+        }
         RqElementChineseRemainderReprImpl {
-            values: RqElementChineseRemainderReprImpl::fft(self.data, |i| UNITY_ROOTS_512[2 * i])
+            values: result_values
         }
     }
 
@@ -274,20 +279,6 @@ impl RqElementChineseRemainderReprImpl
             }
         }
         return values;
-    }
-
-    fn coefficient_repr(ntt_repr: RqElementChineseRemainderReprImpl) -> RqElementCoefficientReprImpl
-    {
-        let inv_n: ZqElement = ONE / ZqElement::from(N as i16);
-        let mut result = Self::fft(ntt_repr.values, |i| UNITY_ROOTS_512[2 * ((N - i) % 256)]);
-        for i in 0..N {
-            // see dft for why this is necessary (we do not do a real fourier transformation)
-            result[i] *= REV_UNITY_ROOTS_512[i];
-            result[i] *= inv_n;
-        }
-        return RqElementCoefficientReprImpl {
-            data: result
-        };
     }
 }
 
@@ -437,15 +428,12 @@ impl Debug for RqElementChineseRemainderReprImpl
     }
 }
 
-// The count of bits we write when encoding an element of Zq 
-const ENCODE_ENTRY_BITS: usize = 13;
-
 impl encoding::Encodable for RqElementChineseRemainderReprImpl
 {
     fn encode<T: encoding::Encoder>(&self, encoder: &mut T)
     {
         for i in 0..N {
-            encoder.encode_bits(self.values[i].representative_pos() as u16, ENCODE_ENTRY_BITS);
+            encoder.encode_bits(self.values[i].representative_pos() as u16, ENCODE_BITS);
         }
     }
 
@@ -453,7 +441,7 @@ impl encoding::Encodable for RqElementChineseRemainderReprImpl
     {
         RqElementChineseRemainderReprImpl {
             values: util::create_array(|_i| {
-                let data_bits = data.read_bits(ENCODE_ENTRY_BITS).expect("Input too short");
+                let data_bits = data.read_bits(ENCODE_BITS).expect("Input too short");
                 ZqElement::from_perfect(data_bits as i16)
             })
         }
@@ -493,9 +481,21 @@ impl RqElementChineseRemainderRepr for RqElementChineseRemainderReprImpl
         }
     }
 
-    fn to_coefficient_repr(self) -> RqElementCoefficientReprImpl 
-    {
-        RqElementChineseRemainderReprImpl::coefficient_repr(self)
+    fn to_coefficient_repr(mut self) -> RqElementCoefficientReprImpl 
+    { 
+        if cfg!(feature = "compatibility") {
+            self.values = ref_impl_compat::convert_their_crt_our_crt(self.values);
+        }
+        let inv_n: ZqElement = ONE / ZqElement::from(N as i16);
+        let mut result = Self::fft(self.values, |i| UNITY_ROOTS_512[2 * ((N - i) % 256)]);
+        for i in 0..N {
+            // see dft for why this is necessary (we do not do a real fourier transformation)
+            result[i] *= REV_UNITY_ROOTS_512[i];
+            result[i] *= inv_n;
+        }
+        return RqElementCoefficientReprImpl {
+            data: result
+        };
     }
 
     fn mul_scalar(&mut self, x: ZqElement)
@@ -563,11 +563,11 @@ fn test_scalar_mul_div() {
     let mut ntt_repr = element.clone().to_chinese_remainder_repr();
     element *= ZqElement::from(653_i16);
     ntt_repr *= ZqElement::from(653_i16);
-    assert_eq!(element, RqElementChineseRemainderReprImpl::coefficient_repr(ntt_repr.clone()));
+    assert_eq!(element, ntt_repr.clone().to_coefficient_repr());
 
     element *= ONE / ZqElement::from(5321_i16);
     ntt_repr *= ONE / ZqElement::from(5321_i16);
-    assert_eq!(element, RqElementChineseRemainderReprImpl::coefficient_repr(ntt_repr.clone()));
+    assert_eq!(element, ntt_repr.clone().to_coefficient_repr());
 }
 
 #[test]
@@ -579,10 +579,10 @@ fn test_add_sub() {
 
     element += &base_element;
     ntt_repr += &base_ntt_repr;
-    assert_eq!(element, RqElementChineseRemainderReprImpl::coefficient_repr(ntt_repr.clone()));
+    assert_eq!(element, ntt_repr.clone().to_coefficient_repr());
 
     element -= &base_element;
     ntt_repr -= &base_ntt_repr;
-    assert_eq!(element, RqElementChineseRemainderReprImpl::coefficient_repr(ntt_repr));
+    assert_eq!(element, ntt_repr.to_coefficient_repr());
     assert_eq!(RqElementCoefficientReprImpl::from(&ELEMENT[..]), element);
 }

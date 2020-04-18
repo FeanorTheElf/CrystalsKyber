@@ -67,6 +67,7 @@ impl<I, J> Iterator for CartesianIterator<I, J>
     }
 }
 
+#[allow(unused)]
 pub fn cartesian<I, J>(mut fst: I, snd: J) -> CartesianIterator<I, J>
     where I: Iterator, I::Item: Clone, J: Iterator + Clone
 {

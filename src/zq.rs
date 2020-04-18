@@ -100,6 +100,9 @@ fn extended_euclidean_algorithm_mod_q(fst: u32, snd: u32) -> (u32, u32)
     return (sa, ta);
 }
 
+// The count of bits we write when encoding an element of Zq 
+pub const ENCODE_BITS: usize = 13;
+
 /// The type of elements of the ring Zq := Z / qZ
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ZqElement 
@@ -363,15 +366,11 @@ impl CompressedZq<1>
 
 #[test]
 fn test_mul() {
-    for i in 0..Q {
-        for j in 0..Q {
-            assert_eq!(ZqElement::from((i * j % Q) as i16), ZqElement::from_perfect(i as i16) * ZqElement::from_perfect(j as i16), "{} * {}", i, j);
-        }
-    }
+    assert_eq!(ZqElement::from(0), ZqElement::from(0) * ZqElement::from(387));
+    assert_eq!(ZqElement::from(387), ZqElement::from(1) * ZqElement::from(387));
+    assert_eq!(ZqElement::from(687), ZqElement::from(1907) * ZqElement::from(238));
+    assert_eq!(ZqElement::from(-2089), ZqElement::from(-238) * ZqElement::from(3462));
 }
-
-use super::ref_impl_compat;
-use super::encoding::Encodable;
 
 #[test]
 fn test_decompress() {

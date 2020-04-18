@@ -190,7 +190,7 @@ impl<R: RqElementCoefficientRepr> std::ops::Index<usize> for RqVector3<R>
 #[derive(PartialEq, Eq, Clone)]
 pub struct RqSquareMatrix3<R: RqElementCoefficientRepr>
 {
-    rows: [RqVector3<R>; DIM]
+    pub rows: [RqVector3<R>; DIM]
 }
 
 impl<R: RqElementCoefficientRepr> RqSquareMatrix3<R>

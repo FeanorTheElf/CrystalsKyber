@@ -542,7 +542,7 @@ impl encoding::Encodable for RqElementChineseRemainderReprImpl
     {
         for vector in &self.values {
             for element in &vector.as_array() {
-                encoder.encode_bits(element.representative_pos() as u16, 16);
+                encoder.encode_bits(element.representative_pos() as u16, ENCODE_BITS);
             }
         }
     }
@@ -550,7 +550,7 @@ impl encoding::Encodable for RqElementChineseRemainderReprImpl
     fn decode<T: encoding::Decoder>(data: &mut T) -> Self
     {
         RqElementChineseRemainderReprImpl {
-            values: util::create_array(|_i| ZqVector8::from(util::create_array(|_j| data.read_bits(16).expect("Input too short") as i16)))
+            values: util::create_array(|_i| ZqVector8::from(util::create_array(|_j| data.read_bits(ENCODE_BITS).expect("Input too short") as i16)))
         }
     }
 }

@@ -8,20 +8,27 @@ extern crate sha3;
 
 #[macro_use]
 mod util;
+#[cfg(target_feature = "avx2")]
 mod avx_util;
 
 mod encoding;
 
 mod zq;
 mod ring;
+
+#[cfg(not(target_feature = "avx2"))]
 mod ref_r;
 mod rqvec;
 
+#[cfg(target_feature = "avx2")]
 mod avx_zq;
+// avx implementation does not work in compatibility mode
+#[cfg(all(target_feature = "avx2", not(feature = "compatibility")))]
 mod avx_r;
 
 mod kyber;
 
+mod io;
 mod ref_impl_compat;
 
 use kyber::*;
@@ -43,18 +50,18 @@ fn time_seed() -> Seed
 
 fn cli_encrypt(key: &str, message: &str) -> String
 {
-    let pk: PublicKey = ref_impl_compat::read_pk_from_ref_impl(key);
-    let message: Plaintext = ref_impl_compat::read_message_from_ref_impl(message);
+    let pk: PublicKey = io::read_pk(key);
+    let message: Plaintext = io::read_message(message);
     let ciphertext = encrypt(&pk, message, time_seed());
-    return ref_impl_compat::write_ciphertext_to_ref_impl(&ciphertext);
+    return io::write_ciphertext(&ciphertext);
 }
 
 fn cli_decrypt(key: &str, ciphertext: &str) -> String
 {
-    let ciphertext: Ciphertext = ref_impl_compat::read_ciphertext_from_ref_impl(ciphertext);
-    let sk: SecretKey = ref_impl_compat::read_sk_from_ref_impl(key);
-    let message: Plaintext = decrypt(&sk, ciphertext);
-    return ref_impl_compat::write_message_to_ref_impl(&message);
+    let ciphertext: Ciphertext = io::read_ciphertext(ciphertext);
+    let sk: SecretKey = io::read_sk(key);
+    let message: Plaintext = decrypt(sk, ciphertext);
+    return io::write_message(&message);
 }
 
 fn cli_key_gen() -> (String, String)
@@ -63,7 +70,7 @@ fn cli_key_gen() -> (String, String)
     let mut sk_seed = time_seed();
     sk_seed[0] ^= 0xF;
     let (sk, pk) = key_gen(pk_seed, sk_seed);
-    return (ref_impl_compat::write_sk_to_ref_impl(&sk), ref_impl_compat::write_pk_to_ref_impl(&pk));
+    return (io::write_sk(&sk), io::write_pk(&pk));
 }
 
 fn main() 
@@ -110,8 +117,9 @@ fn main()
     };
 }
 
+#[cfg(feature = "compatibility")]
 #[test]
-fn test_interaction_reference_implementation() {
+fn test_decrypt_refimpl_encrypted() {
     let ciphertext_str = "\
         Kv4Iun+HlotqPIJ5pCXaRKIQSZOPTbNOWdOxikoKkopYML2+rPbRMzzNwx6SJB65hWHuHS2wunQ+gR9r0djMM9Hw8D3uldWIAiC3zNN8cVYmPuu7+IqmFdtSI7E8ypJfWGQz\
         COGd+2Y3PaOfmC+lDld7PYck5XRQ3KLfAtL0vc1GmCSnmjziFNEKm9k7w/AO6qIr4rB6GMcS7IoMvXVj7StMx0D4DKgIQ82f89NBf1sOobKhXQTJaXka4+2/A4/bATDa2+iP\

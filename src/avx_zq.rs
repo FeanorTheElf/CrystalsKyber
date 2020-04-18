@@ -75,6 +75,22 @@ impl ZqVector8
         ] };
         return util::create_array(|i| ZqElement::from_perfect(data[i] as i16));
     }
+
+    pub fn compose<const IN: usize, const OUT: usize>(data: [ZqElement; IN]) -> [ZqVector8; OUT]
+    {
+        unsafe {
+            let array = avx_util::compose::<IN, OUT>(util::create_array(|i| data[i].representative_pos() as i32));
+            return util::create_array(|i| ZqVector8 { data: array[i] });
+        }
+    }
+
+    pub fn decompose<const IN: usize, const OUT: usize>(data: [ZqVector8; IN]) -> [ZqElement; OUT]
+    {
+        unsafe {
+            let array = avx_util::decompose::<IN, OUT>(util::create_array(|i| data[i].data));
+            return util::create_array(|i| ZqElement::from_perfect(array[i] as i16) );
+        }
+    }
 }
 
 pub fn transpose_vectorized_matrix<const COL_COUNT: usize, const VEC_COUNT: usize>(value: [ZqVector8; VEC_COUNT]) -> [ZqVector8; VEC_COUNT]
