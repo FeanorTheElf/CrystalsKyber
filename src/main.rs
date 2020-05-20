@@ -75,7 +75,6 @@ fn cli_key_gen() -> (String, String)
 
 fn main() 
 {
-    // TODO: too long!
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2{
         println!("Usage: crystals_kyber.exe command parameters...");

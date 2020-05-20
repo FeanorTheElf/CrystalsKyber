@@ -78,8 +78,6 @@ fn extended_euclidean_algorithm_mod_q(fst: u32, snd: u32) -> (u32, u32)
     let (mut sa, mut ta): (u32, u32) = (1, 0);
     let (mut sb, mut tb): (u32, u32) = (0, 1);
 
-    // TODO: the loop runs at most 20 times (20 >= 1 + log_phi(7681)), optimize?
-
     // invariant:
     // a = sa * fst + ta * snd mod q,
     // b = sb * fst + tb * snd mod q
