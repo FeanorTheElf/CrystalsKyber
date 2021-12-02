@@ -2,3 +2,13 @@
 **/*.rs.bk
 CrystalsKyber.zip
 crystals_kyber.exe
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.run.xml
+*.synctex.gz
+*.toc

@@ -1,0 +1,179 @@
+
+\remark[Algebraic properties of the Ring $R_q$]
+\label{structure_rq}
+To prove the search to decision reduction, the embedding $\sigma$ is not of great importance anymore, as we won't deal with ideal lattices anymore. Instead, we need to examine the structure of the ring $R_q$, in which all RLWE operations are performed.
+
+As already mentioned, we have that $K = \mathbb{Q}[\zeta] = \mathbb{Q}[X] / (f)$ with $f = X^n + 1$ is the $2n$-th cyclotomic polynomial. In particular, $\mathbb{Q}(\zeta)/\mathbb{Q}$ is galois, and so $|\mathrm{Aut}_\mathbb{Q}(\mathbb{Q}(\zeta))| = n$ and $\mathrm{Gal}(\mathbb{Q}(\zeta)/\mathbb{Q}) \cong \Z_{2n}^*$.
+
+We also have that the ring of integers $\mathcal{O}_{\mathbb{Q}(\zeta)} = \Z[\zeta]$. Now consider a $\mathbb{Q}$-automorphism $\tau \in \mathrm{Aut}_\mathbb{Q}(\mathbb{Q}(\zeta))$. Then $\tau$ is uniquely determined by the value $\tau(\zeta)$, and it must hold $\tau(\zeta) = \zeta^k$ for some fixed $k \in \Z_{2n}^*$. We get that
+\begin{equation}
+\begin{split}
+\restr{\tau}{\Z[\zeta]}: \Z[\zeta] \to \Z[\zeta] \text{ is a ring automorphism}
+\end{split}\nonumber
+\end{equation}
+\begin{proof}
+$\tau(\Z[\zeta]) \subseteq \Z[\zeta]$, since $\tau(\sum_i a_i \zeta^i) = \sum_i a_i \tau(\zeta)^i = \sum_i a_i \zeta^{ik} \in \Z[\zeta]$ for some fixed $k \in \Z_{2n}^*$ and all $a_i \in \Z$. Injectivity and the homomorphism property follow directly because $\tau$ is a field automorphism. Surjectivity follows since $\tau^{-1}(\Z[\zeta]) \subseteq \Z[\zeta]$ by the same argument as in the well definedness. \qedhere
+\end{proof}
+
+To apply these facts to our ring $R_q$, we now consider these automorphisms modulo $(q)$. We will implicitly use the relation $(\Z[X]/(f))/(q) \cong (\Z[X]/(q))/(f) \cong \Z_q[X]/(f)$. So have
+\begin{equation}
+\begin{split}
+\tau' : \Z_q[\zeta] \to \Z_q[\zeta], \quad [x]_q \mapsto [\tau(x)]_q \text{ is a ring automorphism}
+\end{split}\nonumber
+\end{equation}
+\begin{proof}
+For $[x]_q = [z]_q \in \Z_q[\zeta]$ get that $\tau(x) - \tau(y) = \tau(x - y) \in \tau((q)) = \tau(q) \tau(\Z_q[\zeta]) \subseteq (q)$, so $[\tau(x)]_q = [\tau(y)]_q$ and we get that $\tau'$ is well-defined. Injectivity follows in an analogous way, since if we have $[\tau(x)]_q = [\tau(y)]_q \in \Z_q$, then $[\tau^{-1}(\tau(x))]_q = [\tau^{-1}(\tau(y))]_q$ and so $[x]_q = [y]_q$. To finish, we get surjectivity since $\Z_p[\zeta]$ is finite and obviously, $\tau'$ is a ring homomorphism. \qedhere
+\end{proof}
+
+\subparagraph{Structure of $\tau'$}
+Now have a look at one last interesting property of all $\tau'$: For each $k \in \Z_{2n}^*$, there is exactly one $\tau \in \text{Aut}_\mathbb{Q}(\mathbb{Q}(\zeta))$ with $\tau(\zeta) = \zeta^k$. By definition, we get that $\tau'([\zeta]) = [\zeta^k] = [\zeta]^k$ and so
+\begin{equation}
+\begin{split}
+\tau'\left(\sum_{i = 0}^{n - 1} a_i [\zeta]^i\right) = \sum_{i = 0}^{n - 1} \tau'(a_i) [\zeta]^{ik} =  \sum_{i = 0}^{n - 1} a_i [\zeta]^{ik} = \sum_{i = 0}^{n - 1} a_{\phi(i)} [\zeta]^i
+\end{split}\nonumber
+\end{equation}
+where 
+\begin{equation}
+\begin{split}
+\phi: \Z_{2n} \to \Z_{2n}, x \mapsto k^{-1}x
+\end{split}\nonumber
+\end{equation}
+is a group isomorphism and we consider $a_{n + j} = -a_j$ for $j \in \{0, ..., n-1 \}$. We even have the property that 
+\begin{equation}
+\begin{split}
+\phi': \Z_{2n}/\langle n \rangle \to \Z_{2n}/\langle n \rangle, [x] \mapsto [k^{-1}x]
+\end{split}\nonumber
+\end{equation}
+is a group isomorphism (since $\phi(\langle n \rangle) = \langle kn \rangle = \langle kn \text{ mod } 2n \rangle = \langle n \rangle$ as $k \equiv 1 \mod 2$), so $\tau'$ only permutes and possibly negates the coefficients in the linear combination of $\zeta^0, ..., \zeta^{n-1}$ of any $x \in \Z_p[\zeta]$.
+
+\remark[The Chinese Remainder Representation]
+\label{chinese_remainder_repr}
+Any polynomial $f \in \Z_q[Z]$ of degree $\leq n$ is uniquely determined by the values $f(x_i)$ for different $x_0, ..., x_n \in \Z_q$. Conversely, for different $x_0, ..., x_n \in \Z_q$ and $y_0, ..., y_n \in \Z_q$, there is exactly one polynomial $f$ of degree $\leq n$ with $f(x_i) = y_i$. To use this, we first will have to look at $2n$-th roots of unity again (but they are different ones now):
+
+Let now $q$ be a prime with $q \equiv 1 (\text{mod } 2n)$ and $n$ be a power of two. Since $\Z_q^*$ is cyclic, there must be an element of order $2n | q - 1$. Let $\xi$ be such a element, so $\xi$ is a $2n$-th root of unity in $\Z_q$. We also have that the other  $2n$-th roots of unity are exactly $\xi^k$ for $k \in \Z_{2n}^*$. Since $\phi(2n) = n$, there are exactly $n$ of them. Therefore, we can represent a polynomial $f \in \Z_q$ of degree $\leq n - 1$ by the values $f(\xi^k)$ for $k \in \Z_{2n}^*$. By identifying elements in $\Z_q[x]/(X^n+1)$ with their representatives in $\Z_q[X]$ of degree $\leq n - 1$, we get the evaluation at all primitive $2n$-th roots of unity in $\Z_q$ as:
+\begin{equation}
+\begin{split}
+\mathcal{F}: \Z_q[X]/(X^n+1) \to H, [f] \mapsto (f(\xi^k))_{k \in \Z_{2n}^*} \quad \text{ where } \quad H := \Z_q^{\Z_{2n}^*}
+\end{split}\nonumber
+\end{equation}
+Then this $\mathcal{F}$ is a ring isomorphism ($H$ becomes a ring using element-wise addition and multiplication), and we sometimes call its image the ``Chinese Remainder representation'', as $\mathcal{F}$ is a possible isomorphism for the isomorphy given by the Chinese Remainder theorem for rings:
+\begin{equation}
+R_q \cong \Z_q[X]/(X^n + 1) \cong \bigoplus_{k \in \Z_{2n}^*} \Z_q[X]/(X - \xi^k) \nonumber
+\end{equation}
+$\mathcal{F}$ is also a variant of the Fourier Transformation (usually for $\xi \in \mathbb{C}$) or in this case Number Theoretic Transformation (since $\xi \in \Z_q$), which is the evaluation at all (including non-primitive) $n$-th roots of unity. As a last point, $\mathcal{F}$ has a strong connection to the canonical embedding $\sigma: K \to K_\R$, which corresponds to the evaluation at all primitive $2n$-th roots of unity in $\mathbb{C}$ and not in $\Z_q$. However, $\mathcal{F}$ is no isometry in the sense of \ref{equivalence_norms}, otherwise Ring LWE would be easy to solve (since then the error would also be small in the CRT representation).
+\begin{description}
+\item[Notation] We write $\mathcal{F}f_k$ for $\mathcal{F}(f)(k)$ and for $x = (x_1, ..., x_m)^T \in R_q^k$, have $\mathcal{F}x_k := (\mathcal{F}(x_1)_k, ..., \mathcal{F}(x_m)_k)^T \in \Z_q^m$.
+\end{description}
+
+\begin{proof}
+$\mathcal{F}$ is well-defined, since for $f, g \in \Z_q[X]$ with $f - g \in (X^n+1)$, we have $f(\xi^k) - g(\xi^k) = (f - g)(\xi^k) = 0$ since $\xi^{kn} = -1$ for $k \perp 2$. Bijectivity follows from the observation at the beginning of this section, and $\mathcal{F}$ is a ring homomorphism, as each component $(\mathcal{F} \cdot)_k$ really is the evaluation of the polynomial at $\xi^k$. \qedhere
+\end{proof}
+
+\subsection{Remark}
+Both \ref{structure_rq} and \ref{chinese_remainder_repr} were about roots of unity, but the choice of different symbols ($\zeta$ and $\xi$) indicated that they are not the same. For a power of two $n$ and a prime $q$ with $q \equiv 1 (\text{mod } 2n)$, there have $n$ roots of unity in the field $\Z_q$, which are exactly the $\xi^k$ for $k \in \Z_{2n}^*$. On the other hand, in \ref{structure_rq}, we had some arbitrary ring $R$ (it was $R = \Z$), and we added $2n$-th roots of unity by considering $R[\zeta]$, i.e. $R[X]/(X^n+1)$ with $\zeta = [X]$.
+
+So if the condition $q \equiv 1 (\text{mod } 2n)$ is fulfilled, we really have $2n$ (primitive) $2n$-th roots of unity in the ring $R_q = \Z_q[X]/(X^n+1)$, namely $\xi^k$ and $\zeta^k$ for $k \in \Z_{2n}^*$. How it be possible that the equation $X^n = -1$ has $2n$ solutions? Because in this case, the ring $R_q = \Z_q[X]/(X^n+1)$ is not an integral domain.
+
+This ``unity root duality'' also is why $(\mathcal{F}\zeta)_k = \xi^k$ holds for $k \in \Z_{2n}^*$.
+
+\theorem{RLWE search to decision reduction}
+\label{rlwe_decision_to_search}
+For $\alpha > 0$ and $q \in O(\mathrm{poly}(n))$, have
+\begin{equation}
+\text{Search RLWE}_{q, \leq \alpha} \leq_p \text{Decision RLWE}_{q, \leq \alpha} \nonumber
+\end{equation}
+
+\begin{proof}
+We base this proof on the discrete version of RLWE, as otherwise we would have to extend the CRT isomorphism $\mathcal{F}$ and the ring automorphisms from \ref{structure_rq} to $\T_q$, which would clutter the proof with even more technical details.
+
+The proof presented here is based on \cite{LyuPeiReg}. For simplicity identify $(\mathcal{F}f)_i := (\mathcal{F}f)_{\pi(i)}$ where $i \in \{1, ..., n\}$ and $\pi: \{1, ..., n\} \to \Z_{2n}^*$ is any bijection. We will use the algebraic properties in more depth during the last part of the proof, but until then it is easier to work with $\mathcal{F}f$ as a vector, and only use that addition and multiplication in $\mathcal{F}$-representation are component-wise.
+
+Have oracle $G$ that distinguishes between LWE samples and uniformly 
+chosen ones. We will prove this proposition in four steps:
+\begin{itemize}
+\item Construct an oracle that can distinguish the hybrid distributions defined by using real LWE values for $(\mathcal{F}b)_1, ..., (\mathcal{F}b)_k$ and choosing the values for $(\mathcal{F}b)_{k + 1}, ..., (\mathcal{F}b)_{n}$ uniformly (where $k$ is fixed).
+\item Using this, construct an oracle that can distinguish the cases $\mathcal{F}s_k = r$ and $\mathcal{F}s_k \neq r$ when given some $r \in \Z_q$ and LWE samples for a uniformly chosen secret $s$.
+\item Construct an oracle that can find $(\mathcal{F}s)_k$ when given LWE samples for an arbitrary secret $s$.
+\item Construct an oracle that can find $s$.
+\end{itemize}
+
+\subsection{Distinguish hybrids}
+Let $m \in O(\mathrm{poly}(n))$ be the maximal number of samples the oracle will request, and let $a \in R_q^m,\ u \in R_q^m,\ s \in R_q$ be uniformly distributed and $e \sim \chi^m$ random variables. The oracle $G$ distinguishes the LWE distribution $(a, b)$ (where $b = a s + e$) and the distribution $(a, u)$, so we have 
+\begin{equation}
+\Pr[G(a, b) = 1] - \Pr[G(a, u) = 1] = \Delta \geq \frac 1 {\mathrm{poly}(n)} \nonumber
+\end{equation}
+Define the hybrid distributions $H^{(i)}$ over $R_q^m$ by
+\begin{equation}
+\begin{split}
+\mathcal{F}H^{(i)}_j &= \mathcal{F}b_j \text{ for } j < i\\
+\mathcal{F}H^{(i)}_j &= \mathcal{F}u_j \text{ for } j \geq i
+\end{split}\nonumber
+\end{equation}
+We get that $H^{(1)} = u$ and $H^{(n + 1)} = as + e$. Therefore, $G$ distinguishes $(a, H^{(1)})$ and $(a, H^{(n + 1)})$ with a non-negligible acceptance probability gap $\Delta / n$. By the hybrid argument, we get that $G$ distinguishes $(a, H^{(k + 1)})$ and $(a, H^{(k)})$ for some fixed $k$ with non-negligible probability.
+
+\subsection{Test if one secret position is correct}
+The idea is to modify the $k$-th entry of the input samples (in CRT representation) so that it is either uniform or a valid sample entry, depending on whether $\mathcal{F}s_k = r$ or not, and use the hybrid distinguisher to see which is the case. From the previous section, we have:
+\begin{equation}
+\Pr[G(a, H^{(k + 1)}) = 1] - \Pr[G(a, H^{(k)}) = 1] \geq \Delta / n \nonumber
+\end{equation}
+Given some $r \in \Z_q$, define the modified sample distribution $(a', b')$ as
+\begin{alignat*}{3}
+\mathcal{F}a'_k &= \mathcal{F}a_k + d&&\\
+\mathcal{F}a'_j &= \mathcal{F}a_j &&\text{ for } j \neq k\\
+\\
+\mathcal{F}b'_j &= \mathcal{F}b_j &&\text{ for } j < k\\
+\mathcal{F}b'_k&= \mathcal{F}b_k + dr&&\\
+\mathcal{F}b'_j &= \mathcal{F}u_j &&\text{ for } j > k\\
+\end{alignat*}
+where $d \in \Z_q^m$ is a uniformly distributed random variable. 
+\subparagraph{If $\mathcal{F}s_k = r$} then $(a', b')$ are distributed identically to $H^{(k + 1)}$, as $a'$ is uniform and
+\begin{equation}
+\begin{split}
+\mathcal{F}b'_k &= \mathcal{F}b_k + dr = \mathcal{F}a_k \mathcal{F}sk + \mathcal{F}e_k + dr \\
+&= (\mathcal{F}a_k + d)\mathcal{F}s_k + \mathcal{F}e_k = \mathcal{F}a'_k\mathcal{F}s_k + \mathcal{F}e_k
+\end{split}\nonumber
+\end{equation}
+
+\subparagraph{Otherwise} $(a', b')$ is distributed according to $H^{(k)}$, since $(r - \mathcal{F}s_k) d$ is uniform.
+\\\\
+Therefore, we can distinguish the case $\mathcal{F}s_k = r$ and $\mathcal{F}s_k \neq r$ for every $r \in \Z_q$ by creating these modified samples and calling the hybrid distinguisher $G$ on them (with probability gap $\Delta / n$).
+
+\subsection{Finding one position for worst case secrets}
+To find $(\mathcal{F}s)_k$, we would like to try all $r \in \Z_q$ and find which is the correct one. For arbitrary inputs however, we have to combine this idea with a standard average-to-worst case reduction. Let $G'$ be the oracle constructed before. We have for every $r \neq \mathcal{F}s_k$ that
+\begin{equation}
+\Pr[G'((a, b), \mathcal{F}s_k) = 1] - \Pr[G'((a, b), r) = 1] \geq \Delta / n \nonumber
+\end{equation}
+Now consider the following algorithm, where we define $p = \Pr[G'((a, b), \mathcal{F}s_k) = 1]$:
+\begin{itemize}
+\item Repeat often enough
+\begin{itemize}
+\item Sample $d \sim R_q$ uniformly
+\item Get $m$ new input samples $(a, b)$
+\item Call distinguisher on $(a, b + ad)$
+\end{itemize}
+\item If more than $p - \Delta/2n$ calls accepted, accept
+\end{itemize}
+Since $s + d$ is uniform on $R_q$ and independent of $s$ and we get new input samples each time, all repetitions are independent. Therefore, polynomially many repetitions are sufficient to check whether  $\mathcal{F}s_k = r$ with probability exponentially close to $1$.
+
+Finding $\mathcal{F}s_k$ is easy now: For each $r$, check if $\mathcal{F}s_k = r$ by calling the procedure, and output the $r$ for which the oracle accepts.
+
+\subsection{Finding the whole secret}
+In this section, we will use on the concrete structure of $R_q$ as described in \ref{structure_rq}. The idea is to use the automorphisms to ``permute'' the positions of the secret, and therefore be able to bring each position to the $k$-th one. For this section, consider $k$ to be an element of $\Z_{2n}^*$, i.e. $k_{\text{this section}} := \pi^{-1}(k_{\text{last sections}})$. Then the constructed oracle can find $(\mathcal{F}s)_k = s(\xi^k)$ with high probability.
+
+For any $l \in \Z_{2n}^*$, there is a ring automorphism $\tau: R_q \to R_q$ with $\tau(\zeta) = \zeta^l$. Since $(\mathcal{F}\zeta)_k = \xi^k$, we get that
+\begin{equation}
+\begin{split}
+(\mathcal{F}\tau(a))_k = \tau(a)(\xi^k) = a(\xi^{lk}) = (\mathcal{F}a)_{lk}
+\end{split}\nonumber
+\end{equation}
+As a result, we can find $(\mathcal{F}a)_{lk}$ by applying the oracle on transformed samples $(\tau(a), \tau(b) = \tau(as + e))$. Since $\Z_{2n}^*$ is a group, we can reach any $r \in \Z_{2n}^*$ with $r = lk$ for an appropriate $l \in \Z_{2n}^*$, so we can find all positions of the secret $s$ using this method, and therefore $s$.
+
+\subsection{The error distribution}
+There is one last point we have to pay attention to: Does our oracle work with the transformed samples $(\tau(a), \tau(b))$? The oracle from the last section can work with all valid RLWE samples, so we have to ensure that $(\tau(a), \tau(b))$ is distributed according to $A_{\tau(s), \bar{\Psi}_{\beta'}}$ for some $\beta' \in \R^n, \beta \geq 0$ and $\beta'_i \leq \alpha$ for all $i$. It is quite obvious that $\tau(A)$ is uniformly random for uniform random variable $A \sim R_q$. So the only potential problem is the error distribution: We have $\tau(b) = \tau(as + e) = \tau(a) \tau(s) + \tau(e)$. This is only a valid part of a RLWE distribution for secret $\tau(s)$, if $\tau(e)$ is a valid error.
+
+\subparagraph{Show} $\tau(e)$ is distributed according to $\bar{\Psi}_{\beta'}$. Let $e = \sigma^{-1}(\lfloor e' \rceil) \sim \bar{\Psi}_\beta$ be a random variable representing the error, with $e' \sim \Psi_\beta$. Lemma \ref{rounding_kr_commutes} yields
+\begin{equation}
+\sigma(\tau(e)) = \sigma(\tau(\sigma^{-1}( \lfloor e' \rceil ))) = \pi_\tau(\lfloor e' \rceil) = \lfloor \pi_\tau(e') \rceil \nonumber
+\end{equation}
+and therefore, $\tau(e)$ is distributed identically to $\sigma^{-1}(\lfloor e'' \rceil)$, where $e'' \sim \Psi_{\beta'}$ is a random variable and $\beta'$ is the permutation of $\beta$ given by $\pi_\tau$. Since $\beta'$ is a permutation of $\beta$, we have $\beta' \geq 0$ and $\beta'_i \leq \alpha$ for all $i$. As a result, $\tau(e)$ is distributed like $\sigma^{-1}(\lfloor e'' \rceil)$, which has the distribution $\bar{\Psi}_{\beta'}$ by definition.\qedhere
+\end{proof}
